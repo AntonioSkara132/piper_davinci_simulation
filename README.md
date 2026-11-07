@@ -1,280 +1,280 @@
-Click in the upper right corner for Table of Contents ↗️
+Kliknite u gornji desni kut za sadržaj ↗️ | [English version](README_en.md)
 
-# Piper da Vinci Simulation
-Welcome! These instructions will help you set up everything needed to control a da Vinci surgical instrument held by an AgileX Piper robot arm, first in simulation and later on the real arm.
+# Piper da Vinci simulacija
+Dobro došli! Ove upute pomoći će vam da postavite sve što je potrebno za upravljanje kirurškim instrumentom da Vinci koji drži robotska ruka AgileX Piper, najprije u simulaciji, a kasnije i na stvarnoj ruci.
 
 > [!NOTE]
-> If you encounter an error or a problem during installation, first check out the [Issues](../../issues) tab; maybe the problem has already been solved. If not, create a new issue.
+> Ako tijekom instalacije naiđete na grešku ili problem, najprije pogledajte karticu [Issues](../../issues); možda je problem već riješen. Ako nije, otvorite novi issue.
 
-## Intro
-The robot is an **AgileX Piper**, a small 6-joint arm[^1]. On its flange sits an **open-platform adaptor for da Vinci Si instruments**[^2], which holds an 8 mm da Vinci Si instrument (EndoWrist). The adaptor's motors turn the four input discs of the instrument, and these move:
+## Uvod
+Robot je **AgileX Piper**, mala ruka sa 6 zglobova[^1]. Na njezinoj prirubnici nalazi se **otvoreni adapter za da Vinci Si instrumente**[^2], koji drži 8 mm da Vinci Si instrument (EndoWrist). Motori adaptera okreću četiri ulazna diska instrumenta, a oni pokreću:
 
-- the **roll** of the instrument about its shaft,
-- the **wrist pitch**,
-- **each jaw separately**. Turning both jaws the same way is wrist yaw; turning them apart opens and closes the grip.
+- **rotaciju** instrumenta oko njegove osovine (roll),
+- **pitch zgloba** instrumenta,
+- **svaku čeljust zasebno**. Kad se obje čeljusti okreću u istu stranu, to je yaw zgloba; kad se okreću jedna od druge, hvataljka se otvara i zatvara.
 
-The arm decides where the instrument is and which way its shaft points. The adaptor decides what the instrument's tip does.
+Ruka određuje gdje je instrument i kamo je usmjerena njegova osovina. Adapter određuje što radi vrh instrumenta.
 
-The simulation has two parts:
+Simulacija ima dva dijela:
 
-- **ROS 2 Jazzy** with AgileX's official driver [agx_arm_ros](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2). RViz shows the Piper with the adaptor and the instrument.
-- **SOFA v25.12** with two surgical training scenes from [LapGym](https://github.com/ScheiklP/sofa_env)[^3]:
-  - **rings** (pick_and_place): pick up a ring and put it on a peg of the same colour,
-  - **organ** (grasp_lift_touch): grasp the gallbladder and lift it.
+- **ROS 2 Jazzy** sa službenim AgileX upravljačkim programom [agx_arm_ros](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2). RViz prikazuje Piper s adapterom i instrumentom.
+- **SOFA v25.12** s dvije kirurške scene za vježbu iz [LapGym](https://github.com/ScheiklP/sofa_env)[^3]:
+  - **prstenovi** (pick_and_place): podignite prsten i stavite ga na stup iste boje,
+  - **organ** (grasp_lift_touch): uhvatite žučni mjehur i podignite ga.
 
-  The instrument in these scenes has the same degrees of freedom as the adaptor: roll, wrist pitch and two independent jaws.
+  Instrument u ovim scenama ima iste stupnjeve slobode kao adapter: roll, pitch zgloba i dvije neovisne čeljusti.
 
-You control everything with two keyboards in one terminal: the **ARM keys** move the instrument tip through the Piper, and the **INSTRUMENT keys** drive the adaptor. This is how the pieces are connected:
+Sve upravljate s dvije tipkovnice u jednom terminalu: **tipke RUKE** (ARM keys) pomiču vrh instrumenta preko Pipera, a **tipke INSTRUMENTA** (INSTRUMENT keys) upravljaju adapterom. Ovako su dijelovi povezani:
 
 ```
 ARM keys ──/piper/cmd_vel──> piper_cartesian_jog ──control/joint_states──> robot_state_publisher ──TF──> piper_tool_bridge ──UDP──> SOFA
-                             (inverse kinematics)                          (RViz shows the arm)          (pose of the instrument)
+                             (inverzna kinematika)                         (RViz prikazuje ruku)         (poza instrumenta)
 
-INSTRUMENT keys ──/davinci/cmd_vel──> twist_socket_bridge ──UDP──> SOFA (roll, wrist pitch, wrist yaw, grip)
+INSTRUMENT keys ──/davinci/cmd_vel──> twist_socket_bridge ──UDP──> SOFA (roll, pitch zgloba, yaw zgloba, hvat)
 ```
 
-SOFA runs in its own Python environment, so it talks to ROS through UDP messages on the same computer (port 5006) instead of ROS topics. On the real arm, the AgileX driver reads the same `control/joint_states` topic and moves the arm to those joint positions.
+SOFA radi u vlastitom Python okruženju, pa s ROS-om razgovara UDP porukama na istom računalu (port 5006) umjesto ROS topicima. Na stvarnoj ruci AgileX upravljački program čita isti topic `control/joint_states` i pomiče ruku u te položaje zglobova.
 
 > [!IMPORTANT]
-> Everything in this repository has been tested in simulation only. Driving the real Piper with these programs has not been tested yet. Read the [Real arm](#real-arm) section before you try.
+> Sve u ovom repozitoriju testirano je samo u simulaciji. Upravljanje stvarnim Piperom ovim programima još nije testirano. Pročitajte odjeljak [Stvarna ruka](#stvarna-ruka) prije nego što pokušate.
 
-## Reporting problems
-If you encounter an error that you can't solve yourself or get stuck on some step, please open an [Issue](../../issues) in this repository. Specify your operating system and method of installation, describe your problem, and include the entire output of the command that resulted in the error. This is the quickest way to get help, and it helps other students who run into the same error later.
+## Prijava problema
+Ako naiđete na grešku koju ne možete sami riješiti ili zapnete na nekom koraku, otvorite [Issue](../../issues) u ovom repozitoriju. Navedite operacijski sustav i način instalacije, opišite problem i priložite cijeli ispis naredbe koja je dovela do greške. Tako ćete najbrže dobiti pomoć, a pomoći ćete i drugim studentima koji kasnije naiđu na istu grešku.
 
-## Installation
-Everything runs in a **Docker container**: ROS 2 Jazzy needs Ubuntu 24.04, and SOFA and LapGym need a specific set of Python packages. The Docker image contains all of it, so everyone gets the same setup from one build command.
+## Instalacija
+Sve se pokreće u **Docker kontejneru**: ROS 2 Jazzy treba Ubuntu 24.04, a SOFA i LapGym trebaju točno određen skup Python paketa. Docker slika sadrži sve to, pa svatko dobije isto okruženje jednom naredbom za izgradnju.
 
-### Docker installation
-Very briefly, Docker is a tool that packs everything needed for a specific application into one container. You can look at it as a lightweight virtual machine running on your computer. If you want to learn more, take a look at the [official website](https://www.docker.com/). Detailed step-by-step instructions are given below.
+### Instalacija Dockera
+Ukratko, Docker je alat koji u jedan kontejner pakira sve što je potrebno za određenu aplikaciju. Možete ga zamisliti kao lagani virtualni stroj koji radi na vašem računalu. Ako želite saznati više, pogledajte [službenu stranicu](https://www.docker.com/). Detaljne upute korak po korak nalaze se u nastavku.
 
-#### Prerequisites
-- Linux with a desktop (X11 or Wayland). Tested on Ubuntu 22.04 with GNOME on Wayland.
-- About 12 GB of free disk space. The image is about 9 GB.
-- Graphics: tested with AMD integrated graphics, which the container uses through `/dev/dri`. Intel graphics work the same way. NVIDIA graphics have not been tested; they need the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) and extra `docker run` options.
+#### Preduvjeti
+- Linux s grafičkim sučeljem (X11 ili Wayland). Testirano na Ubuntu 22.04 s GNOME-om na Waylandu.
+- Oko 12 GB slobodnog prostora na disku. Slika ima oko 9 GB.
+- Grafika: testirano s integriranom AMD grafikom, koju kontejner koristi preko `/dev/dri`. Intel grafika radi na isti način. NVIDIA grafika nije testirana; za nju treba [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) i dodatne opcije za `docker run`.
 
-#### Step-by-step instructions
-Follow these [instructions](https://docs.docker.com/engine/install/ubuntu/) to install the Docker engine.
+#### Upute korak po korak
+Slijedite ove [upute](https://docs.docker.com/engine/install/ubuntu/) za instalaciju Docker enginea.
 
-Then follow these [optional steps](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user) to manage Docker as a non-root user. If you skip this, every `docker` command will have to be run with `sudo`.
+Zatim slijedite ove [neobavezne korake](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user) kako biste Docker mogli koristiti bez root ovlasti. Ako to preskočite, svaku `docker` naredbu morat ćete pokretati sa `sudo`.
 
-Clone this repository into your home or any other directory, and go to the `docker` folder:
+Klonirajte ovaj repozitorij u svoj home ili bilo koji drugi direktorij i uđite u mapu `docker`:
 ```bash
 git clone https://github.com/AntonioSkara132/piper_davinci_simulation.git
 cd piper_davinci_simulation/docker
 ```
 
-Build the Docker image. You will see a lot of output. The first build downloads several GB (ROS 2, SOFA, Python packages), so it takes a while. Wait until it's done.
+Izgradite Docker sliku. Vidjet ćete puno ispisa. Prva izgradnja preuzima nekoliko GB (ROS 2, SOFA, Python paketi), pa traje neko vrijeme. Pričekajte da završi.
 ```bash
 docker build -t piper-jazzy .
 ```
 
-Once you have an image, you need a container. The `run_piper.sh` script creates it the first time and opens a shell in it:
+Kad imate sliku, treba vam kontejner. Skripta `run_piper.sh` ga stvori prvi put i otvori ljusku u njemu:
 ```bash
 ./run_piper.sh
 ```
 
-When the script finishes, your terminal prompt changes from
+Kad skripta završi, odzivnik u terminalu promijeni se iz
 ```bash
-<your username>@<your hostname>
+<vaše korisničko ime>@<ime vašeg računala>
 ```
-to
+u
 ```bash
-root@<your hostname>
+root@<ime vašeg računala>
 ```
-This means you are now "inside" the container. ROS 2 and the Piper driver are already loaded in every shell.
+To znači da ste sada "unutar" kontejnera. ROS 2 i upravljački program za Piper već su učitani u svakoj ljusci.
 
 > [!TIP]
-> Short reminder on commands for working with the container:
-> - Exit from the container shell - press `Ctrl+d`. The container keeps running in the background.
-> - Open another terminal in the same container - run `./run_piper.sh` again in a new terminal window.
-> - Run one command in the container from your own terminal - `./run_piper.sh <command>`
-> - Stop the container - `docker stop piper-jazzy`
-> - Start over from the clean image (deletes everything you changed inside the container) - `docker rm -f piper-jazzy`
-> - After rebuilding the image - `docker rm -f piper-jazzy`, then `./run_piper.sh`, so the container is made from the new image.
+> Kratki podsjetnik na naredbe za rad s kontejnerom:
+> - Izlaz iz ljuske kontejnera - pritisnite `Ctrl+d`. Kontejner nastavlja raditi u pozadini.
+> - Otvaranje još jednog terminala u istom kontejneru - ponovno pokrenite `./run_piper.sh` u novom prozoru terminala.
+> - Pokretanje jedne naredbe u kontejneru iz vlastitog terminala - `./run_piper.sh <naredba>`
+> - Zaustavljanje kontejnera - `docker stop piper-jazzy`
+> - Početak ispočetka iz čiste slike (briše sve što ste promijenili unutar kontejnera) - `docker rm -f piper-jazzy`
+> - Nakon ponovne izgradnje slike - `docker rm -f piper-jazzy`, zatim `./run_piper.sh`, kako bi se kontejner napravio iz nove slike.
 
-What `run_piper.sh` does:
+Što radi `run_piper.sh`:
 
-| Option | Why |
+| Opcija | Zašto |
 |---|---|
-| `xhost +local:` | lets the container open windows on your desktop |
-| `--net=host` | ROS 2 topics are visible on your computer, and the container can use the CAN interface of the real arm |
-| `--privileged` | needed to bring the CAN interface up from inside the container |
-| `DISPLAY`, `/tmp/.X11-unix` | RViz and SOFA windows open on your desktop |
-| `--device /dev/dri` | hardware OpenGL for RViz and SOFA |
+| `xhost +local:` | dopušta kontejneru da otvara prozore na vašoj radnoj površini |
+| `--net=host` | ROS 2 topici vidljivi su na vašem računalu, a kontejner može koristiti CAN sučelje stvarne ruke |
+| `--privileged` | potrebno da bi se CAN sučelje podiglo iznutra kontejnera |
+| `DISPLAY`, `/tmp/.X11-unix` | prozori RViza i SOFA-e otvaraju se na vašoj radnoj površini |
+| `--device /dev/dri` | hardverski OpenGL za RViz i SOFA-u |
 
 > [!WARNING]
-> `xhost +local:` allows every local user's programs to draw on your display until you log out. On a shared computer, undo it with `xhost -local:` when you are done.
+> `xhost +local:` dopušta programima svih lokalnih korisnika da crtaju po vašem zaslonu dok se ne odjavite. Na zajedničkom računalu poništite to naredbom `xhost -local:` kad završite.
 >
-> Because of `--net=host`, everyone on the same network with the same `ROS_DOMAIN_ID` sees each other's ROS topics. In a lab with several students, give each computer its own number, for example `export ROS_DOMAIN_ID=17` (any number from 0 to 101).
+> Zbog `--net=host` svi na istoj mreži s istim `ROS_DOMAIN_ID` vide međusobno ROS topice. U laboratoriju s više studenata dajte svakom računalu vlastiti broj, na primjer `export ROS_DOMAIN_ID=17` (bilo koji broj od 0 do 101).
 
-Build options, added to the `docker build` command:
+Opcije izgradnje, dodaju se naredbi `docker build`:
 
-| Option | Effect |
+| Opcija | Učinak |
 |---|---|
-| `--build-arg WITH_SOFA=false` | leaves out SOFA and the simulation (about 3 GB smaller) |
-| `--build-arg WITH_MOVEIT=true` | also installs MoveIt and builds `agx_arm_moveit` (a few GB larger) |
-| `--build-arg AGX_ARM_ROS_REF=ros2 --build-arg PYAGXARM_REF=main` | newest Piper driver and SDK instead of the tested versions |
+| `--build-arg WITH_SOFA=false` | izostavlja SOFA-u i simulaciju (oko 3 GB manje) |
+| `--build-arg WITH_MOVEIT=true` | instalira i MoveIt i gradi `agx_arm_moveit` (nekoliko GB više) |
+| `--build-arg AGX_ARM_ROS_REF=ros2 --build-arg PYAGXARM_REF=main` | najnoviji upravljački program i SDK za Piper umjesto testiranih verzija |
 
-### Without Docker
-Only the Docker setup is tested and supported. If you have Ubuntu 24.04 with ROS 2 Jazzy and want to install natively, the [Dockerfile](docker/Dockerfile) lists every step in order. The scripts expect the same paths as in the image: `/opt/sofa`, `/opt/sofa_venv`, `/opt/sofa_env`, `/opt/sofa_teleop` and `/root/davinci_piper`.
+### Bez Dockera
+Testirana je i podržana samo instalacija s Dockerom. Ako imate Ubuntu 24.04 s ROS 2 Jazzy i želite instalirati izravno na sustav, [Dockerfile](docker/Dockerfile) navodi sve korake redom. Skripte očekuju iste putanje kao u slici: `/opt/sofa`, `/opt/sofa_venv`, `/opt/sofa_env`, `/opt/sofa_teleop` i `/root/davinci_piper`.
 
-## Testing your setup with an example
-Start the ring scene. Inside the container:
+## Provjera instalacije na primjeru
+Pokrenite scenu s prstenovima. Unutar kontejnera:
 ```bash
 run_davinci_piper --rings
 ```
-or from your own terminal, in the `docker` folder:
+ili iz vlastitog terminala, u mapi `docker`:
 ```bash
 ./run_piper.sh run_davinci_piper --rings
 ```
 
-After a few seconds, three windows open and fill the screen:
+Nakon nekoliko sekundi otvore se tri prozora i ispune zaslon:
 
 ```
 +--------------+------------------+
 |              |      RViz        |
-|     SOFA     |  (Piper + tool)  |
-|  ring scene  +------------------+
-|              |  keys terminal   |
+|     SOFA     | (Piper + alat)   |
+|   prstenovi  +------------------+
+|              | terminal s tipk. |
 +--------------+------------------+
 ```
 
-The **keys terminal** has three panes. Click on a pane to type in it:
+**Terminal s tipkama** ima tri okna. Kliknite na okno da biste u njemu tipkali:
 
-1. **SOFA** - messages from the simulation. Every 5 seconds it prints a status line with the position of the instrument wrist (in millimetres), the roll, pitch, yaw and grip angles, and whether something is grasped.
-2. **ARM keys** - moves the instrument tip with the Piper.
-3. **INSTRUMENT keys** - drives the adaptor.
+1. **SOFA** - poruke iz simulacije. Svakih 5 sekundi ispiše statusnu liniju s položajem zgloba instrumenta (u milimetrima), kutovima rolla, pitcha, yawa i hvata te podatkom je li nešto uhvaćeno.
+2. **ARM keys** - pomiče vrh instrumenta pomoću Pipera.
+3. **INSTRUMENT keys** - upravlja adapterom.
 
-**ARM keys** (pane 2):
+**Tipke RUKE** (okno 2):
 
-| Key | Motion |
+| Tipka | Pomak |
 |---|---|
-| `i` / `,` | tip forward / back (away from you / toward you in the SOFA view) |
-| `J` / `L` | tip left / right (hold `Shift`) |
-| `t` / `b` | tip up / down |
-| `j` / `l` | turn the instrument about the vertical axis through the tip |
+| `i` / `,` | vrh naprijed / natrag (od vas / prema vama u prikazu SOFA-e) |
+| `J` / `L` | vrh lijevo / desno (držite `Shift`) |
+| `t` / `b` | vrh gore / dolje |
+| `j` / `l` | okretanje instrumenta oko okomite osi kroz vrh |
 | `k` | stop |
 
-**INSTRUMENT keys** (pane 3):
+**Tipke INSTRUMENTA** (okno 3):
 
-| Key | Motion |
+| Tipka | Pomak |
 |---|---|
-| `j` / `l` | roll the instrument about its shaft |
-| `i` / `,` | wrist pitch |
-| `t` / `b` | wrist yaw (both jaws turn together) |
-| `J` / `L` | close / open the jaws (hold `Shift`) |
+| `j` / `l` | roll instrumenta oko osovine |
+| `i` / `,` | pitch zgloba |
+| `t` / `b` | yaw zgloba (obje čeljusti se okreću zajedno) |
+| `J` / `L` | zatvaranje / otvaranje čeljusti (držite `Shift`) |
 | `k` | stop |
 
-**SOFA pane** (pane 1): type `a` and `Enter` to re-anchor: the instrument stays where it is in the scene, and the Piper's current pose becomes the new reference, like the clutch pedal on a da Vinci console. Type `r` and `Enter` to reset the scene.
+**Okno SOFA** (okno 1): upišite `a` i `Enter` za ponovno sidrenje: instrument ostaje gdje jest u sceni, a trenutna poza Pipera postaje nova referenca, kao papučica spojke (clutch) na da Vinci konzoli. Upišite `r` i `Enter` za ponovno pokretanje scene.
 
-**Mouse in the SOFA window**: scroll to zoom, drag with the left button to rotate the view, drag with the right button to move it, press `c` to go back to the starting view.
+**Miš u prozoru SOFA-e**: kotačić za zumiranje, povlačenje lijevom tipkom za okretanje pogleda, povlačenje desnom tipkom za pomicanje pogleda, tipka `c` za povratak na početni pogled.
 
 > [!TIP]
-> A key keeps the motion going until you press `k` or another key, so you don't need to hold it down. `q` / `z` in a keys pane make that keyboard faster / slower.
+> Tipka nastavlja pomak dok ne pritisnete `k` ili drugu tipku, pa je ne morate držati. `q` / `z` u oknu s tipkama ubrzavaju / usporavaju tu tipkovnicu.
 
-Try to pick up the ring. Right after the start (or after `r` + `Enter`) the instrument wrist is at about (0, 65, 20) mm and the jaws are open:
+Pokušajte podići prsten. Odmah nakon pokretanja (ili nakon `r` + `Enter`) zglob instrumenta je na otprilike (0, 65, 20) mm, a čeljusti su otvorene:
 
-1. ARM `J` for about half a second, then `k`, and ARM `,` for about half a second, then `k`. The wrist should be at about (26, 65, -3) mm, with the jaws over the near edge of the ring.
-2. ARM `b` until the wrist is at a height of about 27 mm.
-3. INSTRUMENT `J` until the status line says `grasped`.
-4. ARM `t` to lift the ring.
+1. RUKA `J` otprilike pola sekunde, zatim `k`, pa RUKA `,` otprilike pola sekunde, zatim `k`. Zglob bi trebao biti na otprilike (26, 65, -3) mm, a čeljusti iznad bližeg ruba prstena.
+2. RUKA `b` dok zglob ne bude na visini od otprilike 27 mm.
+3. INSTRUMENT `J` dok statusna linija ne pokaže `grasped`.
+4. RUKA `t` za podizanje prstena.
 
-The program has more options:
+Program ima još opcija:
 
-| Option | Effect |
+| Opcija | Učinak |
 |---|---|
-| `--rings` | ring scene; without it you get the organ scene |
-| `--sliders` | move the arm with one slider per joint instead of the ARM keys |
-| `--follow` | real arm: show the arm's own joint positions (see [Real arm](#real-arm)) |
-| `--no-tile` | don't open the terminal and don't move windows; attach with `tmux attach -t davinci_piper` |
-| `--motion-scale 0.5` | the instrument moves half as far in the scene as the arm moves |
+| `--rings` | scena s prstenovima; bez nje dobijete scenu s organom |
+| `--sliders` | pomicanje ruke klizačem za svaki zglob umjesto tipkama RUKE |
+| `--follow` | stvarna ruka: prikaz izmjerenih položaja zglobova ruke (vidi [Stvarna ruka](#stvarna-ruka)) |
+| `--no-tile` | ne otvara terminal i ne razmješta prozore; spojite se s `tmux attach -t davinci_piper` |
+| `--motion-scale 0.5` | instrument se u sceni pomiče upola manje nego ruka |
 
-Everything runs in a tmux session called `davinci_piper`. Its second window (`Ctrl+b`, then `n`) shows the ROS programs. To stop everything:
+Sve radi u tmux sesiji `davinci_piper`. Njezin drugi prozor (`Ctrl+b`, zatim `n`) prikazuje ROS programe. Za zaustavljanje svega:
 ```bash
 tmux kill-session -t davinci_piper
 ```
 
-Here are some links about tmux: [Getting started with Tmux](https://linuxize.com/post/getting-started-with-tmux/), [Tmux Cheat Sheet](https://tmuxcheatsheet.com/)
+Nekoliko poveznica o tmuxu: [Getting started with Tmux](https://linuxize.com/post/getting-started-with-tmux/), [Tmux Cheat Sheet](https://tmuxcheatsheet.com/)
 
-## Good to know
-- **The arm's reach is small.** From the starting pose the tip reaches roughly 240 mm forward, 115 mm back, 80 mm left, 120 mm right, 95 mm up and 200 mm down, and the instrument turns only about 9 degrees each way. When a key would take the arm past a joint limit, the arm stops and the ROS window (`Ctrl+b`, `n`) prints `Arm cannot move further this way`. Press the opposite key to move again.
-- **The jaws are not directly below the wrist.** The Piper holds the instrument tilted, with the shaft about 23 degrees from vertical. The jaws end up about 9 mm forward of the wrist position in the status line and 22 mm below it.
-- **Both jaws have to touch the ring to grasp it.** If the jaws are a few millimetres too high or to the side, they close completely (grip 0) without grasping. Open them, move, and try again. Keep the roll near 0, so the jaws close across the ring and not along it.
-- **A grasped ring hangs down from the jaws** and swings about the grasp point. The scene counts a ring as placed when it lies flat around a peg. Lowering it straight onto a peg leaves it hanging over the top of the peg. What works: set the bottom edge of the ring on the board about 20 mm before the peg, swing the instrument forward over the peg so the ring tips over and lies down around it, then open the jaws.
-- **There is no trocar.** In a real operation the shaft passes through a port in the body wall; here the shaft moves freely.
-- **The instrument dimensions are estimates.** The adaptor model comes from its CAD files; the instrument housing and shaft in [piper_davinci.urdf.xacro](docker/davinci/piper_davinci.urdf.xacro) are estimated. Change them there to match your instrument.
+## Dobro je znati
+- **Doseg ruke je malen.** Iz početne poze vrh doseže otprilike 240 mm naprijed, 115 mm natrag, 80 mm lijevo, 120 mm desno, 95 mm gore i 200 mm dolje, a instrument se okreće samo oko 9 stupnjeva na svaku stranu. Kad bi tipka odvela ruku preko granice zgloba, ruka stane, a ROS prozor (`Ctrl+b`, `n`) ispiše `Arm cannot move further this way`. Pritisnite suprotnu tipku da se ruka opet pomakne.
+- **Čeljusti nisu točno ispod zgloba.** Piper drži instrument nagnut, s osovinom oko 23 stupnja od okomice. Čeljusti su oko 9 mm ispred položaja zgloba iz statusne linije i 22 mm ispod njega.
+- **Za hvatanje prstena obje čeljusti moraju ga dodirivati.** Ako su čeljusti nekoliko milimetara previsoko ili sa strane, potpuno se zatvore (hvat 0) bez hvatanja. Otvorite ih, pomaknite se i pokušajte ponovno. Držite roll blizu 0, tako da se čeljusti zatvaraju poprijeko prstena, a ne uzduž njega.
+- **Uhvaćeni prsten visi s čeljusti** i njiše se oko točke hvata. Scena prsten smatra postavljenim kad leži ravno oko stupa. Ako ga spustite ravno na stup, ostane visjeti preko vrha stupa. Ovo radi: spustite donji rub prstena na podlogu oko 20 mm prije stupa, zamahnite instrumentom naprijed preko stupa tako da se prsten prevrne i legne oko njega, zatim otvorite čeljusti.
+- **Nema troakara.** U stvarnoj operaciji osovina prolazi kroz otvor u trbušnoj stijenci; ovdje se osovina slobodno pomiče.
+- **Dimenzije instrumenta su procijenjene.** Model adaptera dolazi iz njegovih CAD datoteka; kućište i osovina instrumenta u [piper_davinci.urdf.xacro](docker/davinci/piper_davinci.urdf.xacro) su procijenjeni. Promijenite ih ondje prema svom instrumentu.
 
-## Real arm
+## Stvarna ruka
 > [!CAUTION]
-> Not tested yet. These steps follow the AgileX documentation. Stay out of the arm's reach while it moves, and keep the emergency stop at hand.
+> Još nije testirano. Ovi koraci slijede AgileX dokumentaciju. Ne ulazite u doseg ruke dok se pomiče i držite tipku za zaustavljanje u nuždi pri ruci.
 
-Plug the Piper's USB-CAN adapter into your computer. Inside the container, bring up the CAN interface:
+Spojite Piperov USB-CAN adapter na računalo. Unutar kontejnera podignite CAN sučelje:
 ```bash
 cd ~/agx_arm_ws/src/agx_arm_ros/scripts
 bash can_activate.sh
 ```
-This brings up `can0` at 1 000 000 bit/s. Check that the arm is talking:
+Ovo podiže `can0` na 1 000 000 bit/s. Provjerite komunicira li ruka:
 ```bash
 ip -details link show can0     # state UP, bitrate 1000000
-candump can0                   # frames scroll by while the arm is powered
+candump can0                   # okviri prolaze dok je ruka uključena
 ```
 
-Start the driver, and first only watch the real arm in RViz (the sliders do not move it):
+Pokrenite upravljački program i najprije samo promatrajte stvarnu ruku u RVizu (klizači je ne pomiču):
 ```bash
 ros2 launch agx_arm_ctrl start_single_agx_arm_rviz.launch.py \
   can_port:=can0 arm_type:=piper effector_type:=agx_gripper \
   follow:=true control:=false
 ```
 
-When that works, stop it with `Ctrl+c`. Start the driver alone, without its RViz, because `run_davinci_piper` starts its own RViz and robot model with the adaptor:
+Kad to radi, zaustavite ga s `Ctrl+c`. Pokrenite samo upravljački program, bez njegovog RViza, jer `run_davinci_piper` pokreće vlastiti RViz i model robota s adapterom:
 ```bash
 ros2 launch agx_arm_ctrl start_single_agx_arm.launch.py \
   can_port:=can0 arm_type:=piper effector_type:=agx_gripper
 ```
-and in a second terminal (`./run_piper.sh`):
+i u drugom terminalu (`./run_piper.sh`):
 ```bash
 run_davinci_piper --rings --follow
 ```
-With `--follow`, RViz and SOFA show the arm's measured joint positions, and the ARM keys start from the arm's current pose. The driver moves the arm to what the ARM keys publish on `control/joint_states`.
+S `--follow` RViz i SOFA prikazuju izmjerene položaje zglobova ruke, a tipke RUKE kreću od trenutne poze ruke. Upravljački program pomiče ruku u položaje koje tipke RUKE objavljuju na `control/joint_states`.
 
-The adaptor's own motors are not connected to ROS yet; the INSTRUMENT keys only move the instrument in the simulation.
+Vlastiti motori adaptera još nisu spojeni na ROS; tipke INSTRUMENTA pomiču instrument samo u simulaciji.
 
-## Working on your project
-All the files are in the [docker](docker) folder. The Dockerfile copies them into the image:
+## Rad na vlastitom projektu
+Sve datoteke nalaze se u mapi [docker](docker). Dockerfile ih kopira u sliku:
 
-| File | In the container | What it does |
+| Datoteka | U kontejneru | Što radi |
 |---|---|---|
-| [davinci/run_davinci_piper.sh](docker/davinci/run_davinci_piper.sh) | `run_davinci_piper` | starts the tmux session with all the programs |
-| [davinci/tile_windows.sh](docker/davinci/tile_windows.sh) | `/root/davinci_piper/` | opens the keys terminal and arranges the windows |
-| [davinci/davinci_piper.launch.py](docker/davinci/davinci_piper.launch.py) | `/root/davinci_piper/` | ROS launch file: robot model, RViz, ARM keys controller or joint sliders |
-| [davinci/piper_davinci.urdf.xacro](docker/davinci/piper_davinci.urdf.xacro) | `/root/davinci_piper/` | robot model: Piper, adaptor, instrument, and the `instrument_wrist` frame that SOFA follows |
-| [davinci/piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py) | `/root/davinci_piper/` | ARM keys: moves the instrument tip, solves the inverse kinematics, publishes joint positions |
-| [davinci/piper_tool_bridge.py](docker/davinci/piper_tool_bridge.py) | `/root/davinci_piper/` | sends the pose of `instrument_wrist` to SOFA |
-| [sofa/twist_socket_bridge.py](docker/sofa/twist_socket_bridge.py) | `/opt/sofa_teleop/` | sends the INSTRUMENT keys to SOFA |
-| [sofa/davinci_piper_teleop.py](docker/sofa/davinci_piper_teleop.py) | `/opt/sofa_teleop/` | the SOFA side: places the Piper in the scene and moves the instrument |
-| [sofa/sofa_env_sofa25.patch](docker/sofa/sofa_env_sofa25.patch) | applied to `/opt/sofa_env` | ports LapGym to SOFA v25.12 and adds the instrument wrist and independent jaws |
-| [sofa/lapgym_keyboard_teleop.py](docker/sofa/lapgym_keyboard_teleop.py), [sofa/run_sofa_teleop.sh](docker/sofa/run_sofa_teleop.sh) | `run_sofa_teleop` | LapGym's own gripper on the organ scene with keyboard control, without the Piper |
-| [sofa/smoke_test.py](docker/sofa/smoke_test.py) | `/opt/sofa_teleop/` | loads all 14 LapGym scenes and runs a few steps in each |
-| [sofa/sofa-python](docker/sofa/sofa-python) | `sofa-python` | Python with SOFA and LapGym; use it to run SOFA scripts |
+| [davinci/run_davinci_piper.sh](docker/davinci/run_davinci_piper.sh) | `run_davinci_piper` | pokreće tmux sesiju sa svim programima |
+| [davinci/tile_windows.sh](docker/davinci/tile_windows.sh) | `/root/davinci_piper/` | otvara terminal s tipkama i razmješta prozore |
+| [davinci/davinci_piper.launch.py](docker/davinci/davinci_piper.launch.py) | `/root/davinci_piper/` | ROS launch datoteka: model robota, RViz, upravljač za tipke RUKE ili klizači zglobova |
+| [davinci/piper_davinci.urdf.xacro](docker/davinci/piper_davinci.urdf.xacro) | `/root/davinci_piper/` | model robota: Piper, adapter, instrument i okvir `instrument_wrist` koji SOFA prati |
+| [davinci/piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py) | `/root/davinci_piper/` | tipke RUKE: pomiče vrh instrumenta, rješava inverznu kinematiku, objavljuje položaje zglobova |
+| [davinci/piper_tool_bridge.py](docker/davinci/piper_tool_bridge.py) | `/root/davinci_piper/` | šalje SOFA-i pozu okvira `instrument_wrist` |
+| [sofa/twist_socket_bridge.py](docker/sofa/twist_socket_bridge.py) | `/opt/sofa_teleop/` | šalje tipke INSTRUMENTA SOFA-i |
+| [sofa/davinci_piper_teleop.py](docker/sofa/davinci_piper_teleop.py) | `/opt/sofa_teleop/` | strana SOFA-e: postavlja Piper u scenu i pomiče instrument |
+| [sofa/sofa_env_sofa25.patch](docker/sofa/sofa_env_sofa25.patch) | primijenjen na `/opt/sofa_env` | prilagođava LapGym za SOFA v25.12 i dodaje zglob instrumenta i neovisne čeljusti |
+| [sofa/lapgym_keyboard_teleop.py](docker/sofa/lapgym_keyboard_teleop.py), [sofa/run_sofa_teleop.sh](docker/sofa/run_sofa_teleop.sh) | `run_sofa_teleop` | LapGymova vlastita hvataljka na sceni s organom, upravljana tipkovnicom, bez Pipera |
+| [sofa/smoke_test.py](docker/sofa/smoke_test.py) | `/opt/sofa_teleop/` | učitava svih 14 LapGym scena i u svakoj izvodi nekoliko koraka |
+| [sofa/sofa-python](docker/sofa/sofa-python) | `sofa-python` | Python sa SOFA-om i LapGymom; koristite ga za pokretanje SOFA skripti |
 
-SOFA scripts run with `sofa-python` (Python 3.12 in its own environment), not with the system `python3` that ROS uses. Check that all scenes load with:
+SOFA skripte pokreću se sa `sofa-python` (Python 3.12 u vlastitom okruženju), a ne sa sustavskim `python3` koji koristi ROS. Provjerite učitavaju li se sve scene:
 ```bash
 sofa-python /opt/sofa_teleop/smoke_test.py
 ```
 
-The two UDP messages SOFA receives on port 5006 are JSON:
+Dvije UDP poruke koje SOFA prima na portu 5006 su u JSON formatu:
 ```
-{"tool_pose": [x, y, z, qx, qy, qz, qw]}     pose of instrument_wrist in the Piper base frame, metres
-{"vel": [vx, vy, vz, wx, wy, wz]}            the INSTRUMENT keys (a geometry_msgs/Twist)
+{"tool_pose": [x, y, z, qx, qy, qz, qw]}     poza okvira instrument_wrist u baznom okviru Pipera, metri
+{"vel": [vx, vy, vz, wx, wy, wz]}            tipke INSTRUMENTA (geometry_msgs/Twist)
 ```
-To move the instrument tip from your own program, publish a `geometry_msgs/Twist` on `/piper/cmd_vel`, the same message the ARM keys send. `linear` moves the tip in the Piper base frame and `angular.z` turns the instrument; a value of 0.5 for `linear` (1.0 for `angular.z`) gives the full speed of 40 mm/s (0.25 rad/s).
+Za pomicanje vrha instrumenta iz vlastitog programa objavite `geometry_msgs/Twist` na `/piper/cmd_vel`, istu poruku koju šalju tipke RUKE. `linear` pomiče vrh u baznom okviru Pipera, a `angular.z` okreće instrument; vrijednost 0.5 za `linear` (1.0 za `angular.z`) daje punu brzinu od 40 mm/s (0.25 rad/s).
 
-Changes you make inside the container are lost when you remove it (`docker rm -f piper-jazzy`). Change the files in the `docker` folder and rebuild the image instead, or copy a changed file in with `docker cp <file> piper-jazzy:<path>`.
+Promjene koje napravite unutar kontejnera gube se kad ga uklonite (`docker rm -f piper-jazzy`). Umjesto toga mijenjajte datoteke u mapi `docker` i ponovno izgradite sliku, ili kopirajte promijenjenu datoteku naredbom `docker cp <datoteka> piper-jazzy:<putanja>`.
 
 
-## License
-The code in this repository is under the [MIT license](LICENSE). The adaptor's CAD model, which the Docker build downloads, is under GPL-3.0 (see its repository).
+## Licenca
+Kod u ovom repozitoriju je pod [MIT licencom](LICENSE). CAD model adaptera, koji Docker izgradnja preuzima, je pod GPL-3.0 (vidi njegov repozitorij).
 
-[^1]: AgileX Piper: a 6-joint arm controlled over CAN. The ROS 2 driver is [agx_arm_ros](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2), branch `ros2`, with the Python SDK [pyAgxArm](https://github.com/agilexrobotics/pyAgxArm).
-[^2]: [Open-Platform adaptor for da Vinci Si instruments](https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments). Its CAD model (GPL-3.0) is downloaded during the Docker build, not stored in this repository.
-[^3]: [sofa_env](https://github.com/ScheiklP/sofa_env) by Paul Maria Scheikl et al., the LapGym collection of surgical scenes for SOFA (MIT license). This repository only contains a patch to it; the build downloads the original.
+[^1]: AgileX Piper: ruka sa 6 zglobova kojom se upravlja preko CAN-a. ROS 2 upravljački program je [agx_arm_ros](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2), grana `ros2`, s Python SDK-om [pyAgxArm](https://github.com/agilexrobotics/pyAgxArm).
+[^2]: [Open-Platform adaptor for da Vinci Si instruments](https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments). Njegov CAD model (GPL-3.0) preuzima se tijekom Docker izgradnje i nije spremljen u ovom repozitoriju.
+[^3]: [sofa_env](https://github.com/ScheiklP/sofa_env), autori Paul Maria Scheikl i suradnici, LapGym zbirka kirurških scena za SOFA-u (MIT licenca). Ovaj repozitorij sadrži samo zakrpu (patch) za nju; izgradnja preuzima original.
