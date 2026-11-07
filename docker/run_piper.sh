@@ -26,8 +26,14 @@ if ! docker container inspect "$NAME" > /dev/null 2>&1; then
         -v /tmp/.X11-unix:/tmp/.X11-unix \
         --device /dev/dri \
         "$IMAGE" sleep infinity > /dev/null
-elif [ "$(docker container inspect -f '{{.State.Running}}' "$NAME")" != "true" ]; then
-    docker start "$NAME" > /dev/null
+else
+    if [ "$(docker container inspect -f '{{.Image}}' "$NAME")" != "$(docker image inspect -f '{{.Id}}' "$IMAGE")" ]; then
+        echo "Note: container $NAME was made from an older $IMAGE image, so it does not have the changes from the last build." >&2
+        echo "To use the new image: docker rm -f $NAME && $0   (this deletes changes made inside the container)" >&2
+    fi
+    if [ "$(docker container inspect -f '{{.State.Running}}' "$NAME")" != "true" ]; then
+        docker start "$NAME" > /dev/null
+    fi
 fi
 
 if [ $# -eq 0 ]; then

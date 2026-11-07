@@ -108,8 +108,11 @@ class WindowedEnvMixin:
             self._init_orbit_from_scene_camera()
         self.sofa_simulation.updateVisual(self._sofa_root_node)
 
-        width = self._camera_object.widthViewport.value
-        height = self._camera_object.heightViewport.value
+        # Take the size from the window: env.reset() puts the camera viewport back to its starting size,
+        # and the image would then fill only part of the window.
+        width, height = self.pygame.display.get_window_size()
+        self._camera_object.widthViewport.value = width
+        self._camera_object.heightViewport.value = height
         gl.glViewport(0, 0, width, height)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
 

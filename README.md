@@ -11,9 +11,17 @@ Simulacija ruke [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tre
 > [!IMPORTANT]
 > Testirano samo u simulaciji.
 
-## Instalacija
-Potrebni su Linux s grafičkim sučeljem, oko 12 GB prostora na disku i [Docker](https://docs.docker.com/engine/install/ubuntu/). Preporučeno je i [korištenje Dockera bez sudo](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user).
+## Postavljanje Dockera
+Docker u jedan kontejner pakira sve što je potrebno za simulaciju (ROS 2 Jazzy, SOFA, LapGym, upravljački program za Piper), pa ništa od toga ne morate instalirati na svoje računalo. Kontejner možete zamisliti kao lagani virtualni stroj. Slika (image) je predložak koji se izgradi jednom, a kontejner je primjerak slike koji pokrećete i u kojem radite.
 
+Potrebni su Linux s grafičkim sučeljem i oko 12 GB prostora na disku.
+
+1. Instalirajte Docker engine prema [službenim uputama](https://docs.docker.com/engine/install/ubuntu/).
+2. Slijedite [korake nakon instalacije](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user) kako biste Docker mogli koristiti kao običan korisnik. Bez toga svaku `docker` naredbu morate pokretati sa `sudo`.
+
+Više o Dockeru: [službena dokumentacija](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
+
+## Instalacija simulacije
 ```bash
 git clone https://github.com/AntonioSkara132/piper_davinci_simulation.git
 cd piper_davinci_simulation/docker
@@ -21,7 +29,7 @@ docker build -t piper-jazzy .
 ./run_piper.sh
 ```
 
-`run_piper.sh` stvara kontejner `piper-jazzy` i otvara ljusku u njemu. Ponovnim pokretanjem otvarate novi terminal u istom kontejneru, a `docker rm -f piper-jazzy` briše kontejner (npr. nakon ponovne izgradnje slike). Više o Dockeru: [službena dokumentacija](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
+`docker build` izgradi sliku `piper-jazzy`, a `run_piper.sh` iz nje stvori kontejner istog imena i otvori ljusku u njemu. Ponovnim pokretanjem `./run_piper.sh` otvarate novi terminal u istom kontejneru. Nakon ponovne izgradnje slike obrišite stari kontejner s `docker rm -f piper-jazzy`, inače i dalje radite u kontejneru iz stare slike.
 
 ## Pokretanje
 Unutar kontejnera:

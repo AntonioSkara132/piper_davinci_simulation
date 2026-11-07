@@ -11,9 +11,17 @@ Simulation of an [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tr
 > [!IMPORTANT]
 > Tested in simulation only.
 
-## Installation
-You need Linux with a desktop, about 12 GB of disk space and [Docker](https://docs.docker.com/engine/install/ubuntu/). [Using Docker without sudo](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user) is recommended.
+## Setting up Docker
+Docker packs everything the simulation needs (ROS 2 Jazzy, SOFA, LapGym, the Piper driver) into one container, so none of it has to be installed on your computer. You can think of a container as a lightweight virtual machine. An image is a template you build once; a container is a copy of the image that you start and work in.
 
+You need Linux with a desktop and about 12 GB of disk space.
+
+1. Install the Docker engine following the [official instructions](https://docs.docker.com/engine/install/ubuntu/).
+2. Follow the [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user) to use Docker as a normal user. Without them every `docker` command has to be run with `sudo`.
+
+More on Docker: [official documentation](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
+
+## Installing the simulation
 ```bash
 git clone https://github.com/AntonioSkara132/piper_davinci_simulation.git
 cd piper_davinci_simulation/docker
@@ -21,7 +29,7 @@ docker build -t piper-jazzy .
 ./run_piper.sh
 ```
 
-`run_piper.sh` creates the `piper-jazzy` container and opens a shell in it. Running it again opens another terminal in the same container; `docker rm -f piper-jazzy` removes the container (e.g. after rebuilding the image). More on Docker: [official documentation](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
+`docker build` builds the `piper-jazzy` image, and `run_piper.sh` creates a container with the same name from it and opens a shell in it. Running `./run_piper.sh` again opens another terminal in the same container. After rebuilding the image, remove the old container with `docker rm -f piper-jazzy`, otherwise you keep working in the container made from the old image.
 
 ## Running
 Inside the container:
