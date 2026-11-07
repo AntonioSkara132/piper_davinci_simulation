@@ -1,0 +1,1133 @@
+diff --git a/sofa_env/scenes/grasp_lift_touch/grasp_lift_touch_env.py b/sofa_env/scenes/grasp_lift_touch/grasp_lift_touch_env.py
+index ec6e20d..23eb66a 100644
+--- a/sofa_env/scenes/grasp_lift_touch/grasp_lift_touch_env.py
++++ b/sofa_env/scenes/grasp_lift_touch/grasp_lift_touch_env.py
+@@ -617,7 +617,7 @@ class GraspLiftTouchEnv(SofaEnv):
+ 
+         self.reward_features["cauter_activation_in_target"] = (self.reward_features["distance_cauter_target"] < self.goal_tolerance) and self.cauter.active
+         # Restrict grasps to ones that are performed on the infundibulum of the gallbladder
+-        if np.any(np.in1d(self.gripper.grasping_force_field["shaft"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)) and np.any(np.in1d(self.gripper.grasping_force_field["jaw"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)):
++        if np.any(np.isin(self.gripper.grasping_force_field["shaft"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)) and np.any(np.isin(self.gripper.grasping_force_field["jaw"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)):
+             self.reward_features["gallblader_is_grasped"] = self.gripper.grasp_established
+         else:
+             self.reward_features["gallblader_is_grasped"] = False
+@@ -758,7 +758,7 @@ class GraspLiftTouchEnv(SofaEnv):
+ 
+         # Grasping
+         # Restrict grasps to ones that are performed on the infundibulum of the gallbladder
+-        if np.any(np.in1d(self.gripper.grasping_force_field["shaft"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)) and np.any(np.in1d(self.gripper.grasping_force_field["jaw"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)):
++        if np.any(np.isin(self.gripper.grasping_force_field["shaft"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)) and np.any(np.isin(self.gripper.grasping_force_field["jaw"].points.array(), self.gallbladder_indices_in_grasping_roi_collision)):
+             reward_features["gallblader_is_grasped"] = self.gripper.grasp_established
+             reward_features["new_grasp_on_gallbladder"] = reward_features["gallblader_is_grasped"] and not previous_reward_features["gallblader_is_grasped"]
+         else:
+diff --git a/sofa_env/scenes/grasp_lift_touch/scene_description.py b/sofa_env/scenes/grasp_lift_touch/scene_description.py
+index 4cf6fe4..f00bc0b 100644
+--- a/sofa_env/scenes/grasp_lift_touch/scene_description.py
++++ b/sofa_env/scenes/grasp_lift_touch/scene_description.py
+@@ -51,6 +51,8 @@ def createScene(
+     show_everything: bool = False,
+     animation_loop: AnimationLoopType = AnimationLoopType.DEFAULT,
+     randomize_poi_position: bool = True,
++    double_action_gripper: bool = True,
++    instrument_wrist: bool = False,
+ ) -> Dict:
+ 
+     """
+@@ -62,6 +64,10 @@ def createScene(
+         show_everything (bool): Render additional information for debugging.
+         animation_loop (AnimationLoopType): Animation loop of the simulation.
+         randomize_poi_position (bool): Randomize the position of the point of interest.
++        double_action_gripper (bool): Use forceps whose two jaws both open (as on da Vinci graspers).
++            False uses the original single-action forceps, where one jaw is fixed to the shaft.
++        instrument_wrist (bool): Add a wrist pitch joint between the shaft and the jaws, as on a da Vinci EndoWrist
++            instrument. Needs ``double_action_gripper``.
+ 
+     Returns:
+         scene_creation_result = {
+@@ -165,11 +171,18 @@ def createScene(
+     gripper = Gripper(
+         parent_node=scene_node,
+         name="Gripper",
+-        visual_mesh_path_shaft=INSTRUMENT_MESH_DIR / "single_action_forceps_shaft.stl",
+-        visual_mesh_path_jaw=INSTRUMENT_MESH_DIR / "single_action_forceps_jaw.stl",
++        visual_mesh_path_shaft=INSTRUMENT_MESH_DIR / ("instrument_shaft.stl" if double_action_gripper else "single_action_forceps_shaft.stl"),
++        visual_mesh_path_jaw=(
++            [INSTRUMENT_MESH_DIR / "forceps_jaw_left.stl", INSTRUMENT_MESH_DIR / "forceps_jaw_right.stl"]
++            if double_action_gripper
++            else INSTRUMENT_MESH_DIR / "single_action_forceps_jaw.stl"
++        ),
+         gallbladder_to_grasp=gallbladder,
+         ptsd_state=np.array([-15.0, 30.0, -20.0, 130.0]),
+-        angle=45,
++        # The double-action jaws each open by the angle, so the total opening is twice the value.
++        angle=20 if double_action_gripper else 45,
++        # With a wrist each jaw turns up to 80 deg either way (yaw); the opening is limited by the controller.
++        angle_limits=(0.0, 80.0) if instrument_wrist else (0.0, 35.0) if double_action_gripper else (0.0, 60.0),
+         collision_spheres_config={
+             "positions": [[0, 0, 5 + i * 2] for i in range(10)],
+             "radii": [1] * 10,
+@@ -183,7 +196,12 @@ def createScene(
+         },
+         total_mass=1e5,
+         ptsd_reset_noise=np.array([10.0, 10.0, 45.0, 10.0]),
+-        angle_reset_noise=20.0,
++        angle_reset_noise=10.0 if double_action_gripper else 20.0,
++        # EndoWrist-like wrist: pitch about the shaft y axis, jaw hinge (yaw, about x) 9 mm further out.
++        wrist_axis=(0, 1, 0) if instrument_wrist else None,
++        wrist_to_jaw_distance=9.0,
++        wrist_angle_limits=(-80.0, 80.0),
++        visual_mesh_path_wrist=HERE / "meshes" / "wrist_link.obj" if instrument_wrist else None,
+     )
+ 
+     scene_node.addObject(gripper)
+@@ -212,7 +230,7 @@ def createScene(
+     scene_node.addObject(ToolController(gripper=gripper, cauter=cauter))
+ 
+     cauter_collision_model = cauter.sphere_collision_model.getLinkPath()
+-    gripper_collision_model = gripper.physical_shaft_node.approximated_collision_shaft_jaw.SphereCollisionModel.getLinkPath()
++    gripper_collision_model = gripper.sphere_collisions_shaft.getLinkPath()
+     gallbladder_collision_model = gallbladder.collision_model_node.TriangleCollisionModel.getLinkPath()
+     liver_collision_model = liver.collision_model_node.TriangleCollisionModel.getLinkPath()
+ 
+diff --git a/sofa_env/scenes/grasp_lift_touch/sofa_objects/gripper.py b/sofa_env/scenes/grasp_lift_touch/sofa_objects/gripper.py
+index 21e50aa..f7a2060 100644
+--- a/sofa_env/scenes/grasp_lift_touch/sofa_objects/gripper.py
++++ b/sofa_env/scenes/grasp_lift_touch/sofa_objects/gripper.py
+@@ -2,7 +2,7 @@ import numpy as np
+ 
+ from functools import partial
+ from pathlib import Path
+-from typing import Callable, Dict, Optional, Tuple, Union
++from typing import Callable, Dict, List, Optional, Tuple, Union
+ 
+ import Sofa
+ import Sofa.Core
+@@ -32,7 +32,7 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+         parent_node: Sofa.Core.Node,
+         name: str,
+         visual_mesh_path_shaft: Union[str, Path],
+-        visual_mesh_path_jaw: Union[str, Path],
++        visual_mesh_path_jaw: Union[str, Path, List[Union[str, Path]]],
+         gallbladder_to_grasp: Gallbladder,
+         ptsd_state: np.ndarray = np.zeros(4, dtype=np.float32),
+         rcm_pose: np.ndarray = np.zeros(6, dtype=np.float32),
+@@ -79,8 +79,20 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+         },
+         show_remote_center_of_motion: bool = False,
+         deactivate_collision_while_grasped: bool = True,
++        wrist_axis: Optional[Tuple[int, int, int]] = None,
++        wrist_to_jaw_distance: float = 0.0,
++        wrist_angle_limits: Tuple[float, float] = (-90.0, 90.0),
++        visual_mesh_path_wrist: Optional[Union[str, Path]] = None,
+     ) -> None:
++        # One jaw mesh: single-action forceps. The fixed jaw is part of the shaft mesh and only one jaw opens.
++        # Two jaw meshes: double-action forceps. Both jaws open symmetrically, each by ``angle``.
++        if isinstance(visual_mesh_path_jaw, (list, tuple)):
++            visual_mesh_paths_jaws = list(visual_mesh_path_jaw)
++        else:
++            visual_mesh_paths_jaws = [visual_mesh_path_jaw]
++
+         Sofa.Core.Controller.__init__(self)
++        self.double_action = len(visual_mesh_paths_jaws) == 2
+         self.name: Sofa.Core.DataString = f"{name}_controller"
+         self.gripper_node = parent_node.addChild(f"{name}_node")
+ 
+@@ -101,7 +113,7 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+             cartesian_workspace=cartesian_workspace,
+             state_limits=state_limits,
+             visual_mesh_path_shaft=visual_mesh_path_shaft,
+-            visual_mesh_paths_jaws=[visual_mesh_path_jaw],
++            visual_mesh_paths_jaws=visual_mesh_paths_jaws,
+             angle=angle,
+             angle_limits=angle_limits,
+             total_mass=total_mass,
+@@ -120,6 +132,10 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+             collision_group=collision_group,
+             ptsd_reset_noise=ptsd_reset_noise,
+             angle_reset_noise=angle_reset_noise,
++            wrist_axis=wrist_axis,
++            wrist_to_jaw_distance=wrist_to_jaw_distance,
++            wrist_angle_limits=wrist_angle_limits,
++            visual_mesh_path_wrist=visual_mesh_path_wrist,
+         )
+ 
+         self.gallbladder = gallbladder_to_grasp
+@@ -147,8 +163,13 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+         # Define the z positions of the sphere collision models
+         self.num_spheres = len(collision_spheres_config["positions"])
+ 
+-        # Add sphere collision models to the gripper jaw amd the static gripper jaw
+-        self.collision_node_shaft = self.physical_shaft_node.addChild("approximated_collision_shaft_jaw")
++        # Sphere collision models on the two gripping surfaces. The "shaft" entries are the lower surface:
++        # the fixed jaw (part of the shaft) on the single-action forceps, the second moving jaw on the
++        # double-action forceps. The env reads them under these names.
++        if self.double_action:
++            self.collision_node_shaft = self.physical_jaw_node.addChild("approximated_collision_jaw_1")
++        else:
++            self.collision_node_shaft = self.physical_shaft_node.addChild("approximated_collision_shaft_jaw")
+         self.collision_node_jaw = self.physical_jaw_node.addChild("approximated_collision_jaw_0")
+ 
+         # Add MechanicalObjects to both jaws
+@@ -159,11 +180,14 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+ 
+         # Add CollisionModel, and RigidMapping to jaw 0
+         self.sphere_collisions_shaft = self.collision_node_shaft.addObject("SphereCollisionModel", radius=[1] * self.num_spheres, group=0, contactStiffness=collision_contact_stiffness)
+-        self.collision_node_shaft.addObject("RigidMapping", input=self.physical_shaft_mechanical_object.getLinkPath(), index=0)
++        if self.double_action:
++            self.collision_node_shaft.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=self.jaw_joint_index_offset + 1)
++        else:
++            self.collision_node_shaft.addObject("RigidMapping", input=self.physical_shaft_mechanical_object.getLinkPath(), index=0)
+ 
+         # Add CollisionModel, and RigidMapping to jaw 1
+         self.sphere_collisions_jaw = self.collision_node_jaw.addObject("SphereCollisionModel", radius=[1] * self.num_spheres, group=0, contactStiffness=collision_contact_stiffness)
+-        self.collision_node_jaw.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=1)
++        self.collision_node_jaw.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=self.jaw_joint_index_offset)
+ 
+         self.contact_listener = {
+             "shaft": self.gripper_node.addObject(
+@@ -220,7 +244,7 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+                 self.sphere_collisions_shaft.active = True
+                 self.sphere_collisions_jaw.active = True
+ 
+-        self.grasping_active = self.get_angle() < self.angle_to_grasp_threshold
++        self.grasping_active = self.get_jaw_opening() < self.angle_to_grasp_threshold
+ 
+         if self.grasping_active and self.grasp_established:
+             self.identify_execessive_force()
+@@ -312,9 +336,12 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+         """
+ 
+         self.set_state(state=self.ptsd_state + action[:4])
+-        self.set_angle(angle=self.get_angle() + action[-1])
++        # set_angle moves both jaws symmetrically, so skip it when no jaw motion is commanded.
++        # That keeps jaw angles set independently with set_jaw_angles (wrist yaw).
++        if action[-1] != 0:
++            self.set_angle(angle=self.get_angle() + action[-1])
+         self.articulated_state[:4] = self.ptsd_state
+-        self.articulated_state[-1] = self.get_angle()
++        self.articulated_state[-1] = np.squeeze(self.get_angle())
+ 
+     def set_articulated_state(self, state: np.ndarray) -> None:
+         """Set the state of the articulated instrument.
+@@ -325,7 +352,7 @@ class Gripper(Sofa.Core.Controller, PivotizedArticulatedInstrument):
+         self.set_state(state=state[:4])
+         self.set_angle(angle=state[-1])
+         self.articulated_state[:4] = self.ptsd_state
+-        self.articulated_state[-1] = self.get_angle()
++        self.articulated_state[-1] = np.squeeze(self.get_angle())
+ 
+     def reset_gripper(self) -> None:
+         """Resets the gripper state and releases any potential grasps."""
+diff --git a/sofa_env/scenes/ligating_loop/sofa_objects/cavity.py b/sofa_env/scenes/ligating_loop/sofa_objects/cavity.py
+index 5ffc25a..095ccd8 100644
+--- a/sofa_env/scenes/ligating_loop/sofa_objects/cavity.py
++++ b/sofa_env/scenes/ligating_loop/sofa_objects/cavity.py
+@@ -152,7 +152,7 @@ class Cavity:
+         # This set has two additional points, in the middle of the openings at start and end of the cavity
+         shell_triangles = []
+         for triangle in triangle_node.TriangleSetTopologyContainer.triangles.array():
+-            if np.all(np.in1d(triangle, self.outer_indices)):
++            if np.all(np.isin(triangle, self.outer_indices)):
+                 shell_triangles.append(triangle)
+ 
+         shell_points = points.copy()
+diff --git a/sofa_env/scenes/ligating_loop/sofa_objects/gripper.py b/sofa_env/scenes/ligating_loop/sofa_objects/gripper.py
+index 3eadf05..5d4fe4e 100644
+--- a/sofa_env/scenes/ligating_loop/sofa_objects/gripper.py
++++ b/sofa_env/scenes/ligating_loop/sofa_objects/gripper.py
+@@ -235,7 +235,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+     def get_articulated_state(self) -> np.ndarray:
+         """Gets the state of the instrument including the articulation angle withing the defined state limits."""
+         self.articulated_state[:4] = self.ptsd_state
+-        self.articulated_state[-1] = self.get_angle()
++        self.articulated_state[-1] = np.squeeze(self.get_angle())
+         read_only_state = self.articulated_state.view()
+         read_only_state.flags.writeable = False
+         return read_only_state
+diff --git a/sofa_env/scenes/pick_and_place/pick_and_place_env.py b/sofa_env/scenes/pick_and_place/pick_and_place_env.py
+index 63ce59c..2177e47 100644
+--- a/sofa_env/scenes/pick_and_place/pick_and_place_env.py
++++ b/sofa_env/scenes/pick_and_place/pick_and_place_env.py
+@@ -449,7 +449,7 @@ class PickAndPlaceEnv(SofaEnv):
+         if self.torus_tracking_point_indices is not None:
+             reward_features["gripper_distance_to_torus_tracking_points"] = np.min(reward_features["gripper_distance_to_torus_tracking_points"])
+             reward_features["delta_gripper_distance_to_torus_tracking_points"] = np.min(reward_features["delta_gripper_distance_to_torus_tracking_points"])
+-        if self.num_active_pegs > 1:
++        if self.num_active_pegs >= 1:
+             reward_features["torus_distance_to_active_pegs"] = np.min(reward_features["torus_distance_to_active_pegs"])
+             reward_features["delta_torus_distance_to_active_pegs"] = np.min(reward_features["delta_torus_distance_to_active_pegs"])
+ 
+@@ -595,15 +595,19 @@ class PickAndPlaceEnv(SofaEnv):
+         for callback in self.on_reset_callbacks:
+             callback(self)
+ 
+-        # Animate several timesteps without actions until simulation settles
+-        for _ in range(self._settle_steps):
++        # Animate several timesteps without actions until simulation settles.
++        # The torus starts in the air and needs about 60 steps to land and come to rest,
++        # so keep animating (up to 10 * settle_steps) until its mean speed drops below 25 mm/s.
++        mean_torus_velocity = np.inf
++        for step in range(10 * self._settle_steps):
+             self.sofa_simulation.animate(self._sofa_root_node, self._sofa_root_node.getDt())
++            if step + 1 >= self._settle_steps:
++                mean_torus_velocity = np.mean(np.linalg.norm(self.torus.mechanical_object.velocity.array()[:, :3], axis=1))
++                if mean_torus_velocity <= 25.0:
++                    break
+ 
+-        # If the torus is immediately unstable after reset, do reset again
+-        # The torus is probably unstable, if the mean velocity is larger than 25 mm/s
+-        mean_torus_velocity = np.mean(np.linalg.norm(self.torus.mechanical_object.velocity.array()[:, :3], axis=1))
+-        torus_probably_unstable = mean_torus_velocity > 25.0
+-        if torus_probably_unstable:
++        # If the torus did not come to rest, the simulation is probably unstable, so reset again
++        if mean_torus_velocity > 25.0:
+             print("Reset again, because simulation was unstable!")
+             self.reset()
+ 
+@@ -614,16 +618,27 @@ class PickAndPlaceEnv(SofaEnv):
+ 
+ 
+ if __name__ == "__main__":
++    import argparse
++    import os
+     import pprint
+     import time
+ 
++    parser = argparse.ArgumentParser(description="Pick-and-place demo: the gripper holds a ring while the scene runs.")
++    parser.add_argument("--width", type=int, default=600, help="window width in pixels")
++    parser.add_argument("--height", type=int, default=600, help="window height in pixels")
++    parser.add_argument("--x", type=int, default=None, help="window x position on screen")
++    parser.add_argument("--y", type=int, default=None, help="window y position on screen")
++    args = parser.parse_args()
++    if args.x is not None and args.y is not None:
++        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{args.x},{args.y}"
++
+     pp = pprint.PrettyPrinter()
+ 
+     env = PickAndPlaceEnv(
+         observation_type=ObservationType.STATE,
+         render_mode=RenderMode.HUMAN,
+         action_type=ActionType.CONTINUOUS,
+-        image_shape=(600, 600),
++        image_shape=(args.width, args.height),
+         frame_skip=10,
+         time_step=0.01,
+         settle_steps=50,
+diff --git a/sofa_env/scenes/pick_and_place/scene_description.py b/sofa_env/scenes/pick_and_place/scene_description.py
+index 2397365..847036b 100644
+--- a/sofa_env/scenes/pick_and_place/scene_description.py
++++ b/sofa_env/scenes/pick_and_place/scene_description.py
+@@ -19,6 +19,9 @@ from sofa_env.utils.camera import determine_look_at
+ from sofa_env.utils.math_helper import euler_to_rotation_matrix, rotation_matrix_to_quaternion
+ from sofa_env.utils.pivot_transform import sofa_orientation_to_camera_orientation
+ 
++# Link between the wrist joint and the jaw hinge (shared with the grasp_lift_touch scene).
++WRIST_MESH_PATH = Path(__file__).resolve().parent.parent / "grasp_lift_touch" / "meshes" / "wrist_link.obj"
++
+ 
+ PLUGIN_LIST = (
+     [
+@@ -68,6 +71,7 @@ def createScene(
+         "total_mass": 5.0,
+         "poisson_ratio": 0.0,
+     },
++    instrument_wrist: bool = False,
+ ) -> Dict:
+     """
+     Creates the scene of the PickAndPlaceEnv.
+@@ -80,6 +84,7 @@ def createScene(
+         start_grasped (bool): SET BY ENV. Whether the episode should start with the torus already grasped by the gripper.
+         gripper_randomization (Optional[dict]): Parameters for the randomization of the gripper.
+         torus_parameters (Dict[str, float]): Parameters for the mechanical behavior of the torus.
++        instrument_wrist (bool): Give the gripper a wrist pitch joint 9 mm behind the jaw hinge, and let each jaw turn up to 80 degrees so both can turn together (wrist yaw), like a da Vinci EndoWrist instrument.
+ 
+     Returns:
+         scene_creation_result = {
+@@ -313,6 +318,11 @@ def createScene(
+             spring_stiffness_grasping=1e9,
+             angular_spring_stiffness_grasping=1e9,
+             grasp_index_pair=(6, 5),
++            angle_limits=(0.0, 80.0) if instrument_wrist else (0.0, 60.0),
++            wrist_axis=(0, 1, 0) if instrument_wrist else None,
++            wrist_to_jaw_distance=9.0,
++            wrist_angle_limits=(-80.0, 80.0),
++            visual_mesh_path_wrist=WRIST_MESH_PATH if instrument_wrist else None,
+             **gripper_randomization,
+         )
+     )
+diff --git a/sofa_env/scenes/precision_cutting/sofa_objects/cloth.py b/sofa_env/scenes/precision_cutting/sofa_objects/cloth.py
+index 2384d3a..3e147d2 100644
+--- a/sofa_env/scenes/precision_cutting/sofa_objects/cloth.py
++++ b/sofa_env/scenes/precision_cutting/sofa_objects/cloth.py
+@@ -230,7 +230,7 @@ class Cloth(Sofa.Core.Controller):
+             subset_triangles=triangles_on_path,
+         )
+ 
+-        subset_indices_of_centerline = np.where(np.in1d(vertex_indices_on_path, self.centerline_indices))[0]
++        subset_indices_of_centerline = np.where(np.isin(vertex_indices_on_path, self.centerline_indices))[0]
+         subset_positions_of_centerline = cloth_transform.output_position.array()[self.centerline_indices].copy()
+ 
+         self.on_path_subset_centerline, self.on_path_subset_topology_centerline = self._add_point_subset_topology(
+diff --git a/sofa_env/scenes/rope_threading/sofa_objects/gripper.py b/sofa_env/scenes/rope_threading/sofa_objects/gripper.py
+index 159bf8b..0605835 100644
+--- a/sofa_env/scenes/rope_threading/sofa_objects/gripper.py
++++ b/sofa_env/scenes/rope_threading/sofa_objects/gripper.py
+@@ -124,7 +124,15 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+         recalculate_orientation_offset: bool = True,
+         grasp_index_pair: Tuple[int, int] = (0, 0),
+         deactivate_collision_while_grasped: bool = False,
++        wrist_axis: Optional[Tuple[int, int, int]] = None,
++        wrist_to_jaw_distance: float = 0.0,
++        wrist_angle_limits: Tuple[float, float] = (-90.0, 90.0),
++        visual_mesh_path_wrist: Optional[Union[str, Path]] = None,
+     ) -> None:
++        """The wrist parameters are passed to ArticulatedInstrument: ``wrist_axis`` adds a wrist joint between the
++        shaft and the jaws (``None``, the default, means no wrist), ``wrist_to_jaw_distance`` is the distance from
++        that joint to the jaw hinge along the shaft. With a wrist, the grasping points follow the wrist instead of
++        the shaft."""
+         Sofa.Core.Controller.__init__(self)
+         self.name: Sofa.Core.DataString = f"{name}_controller"
+ 
+@@ -171,6 +179,10 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+             angular_spring_stiffness=angular_spring_stiffness,
+             articulation_spring_stiffness=articulation_spring_stiffness,
+             collision_group=collision_group,
++            wrist_axis=wrist_axis,
++            wrist_to_jaw_distance=wrist_to_jaw_distance,
++            wrist_angle_limits=wrist_angle_limits,
++            visual_mesh_path_wrist=visual_mesh_path_wrist,
+         )
+ 
+         self.cartesian_workspace = cartesian_workspace
+@@ -224,20 +236,24 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+ 
+         # A reference object that has as many points as points as there are collisions models, and is mapped to the motion target
+         motion_reference_node = self.grasping_node.addChild("motion_reference")
++        hinge_offset = np.array([0.0, 0.0, wrist_to_jaw_distance if self.has_wrist else 0.0])
+         self.motion_mapping_mechanical_object = motion_reference_node.addObject(
+             "MechanicalObject",
+             template="Vec3d",
+-            position=[position for position in collision_spheres_config["positions"]],
++            position=[np.asarray(position, dtype=float) + hinge_offset for position in collision_spheres_config["positions"]],
+             showObject=show_object,
+             showObjectScale=show_object_scale / 2,
+         )
+-        motion_reference_node.addObject("RigidMapping", input=self.physical_shaft_mechanical_object.getLinkPath())
++        if self.has_wrist:
++            motion_reference_node.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=1)
++        else:
++            motion_reference_node.addObject("RigidMapping", input=self.physical_shaft_mechanical_object.getLinkPath())
+ 
+         # The MechanicalObject that is used for grasping by introducing springs. No mapping, because position and orientation are set in onAnimateBeginEvent
+         self.grasping_mechanical_object = self.grasping_node.addObject(
+             "MechanicalObject",
+             template="Rigid3d",
+-            position=[append_orientation(position) for position in collision_spheres_config["positions"]],
++            position=[append_orientation((np.asarray(position, dtype=float) + hinge_offset).tolist()) for position in collision_spheres_config["positions"]],
+             showObject=show_object,
+             showObjectScale=show_object_scale / 2,
+         )
+@@ -262,7 +278,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+         self.collision_node_jaw_0.addObject(
+             "RigidMapping",
+             input=self.joint_mechanical_object.getLinkPath(),
+-            index=1,
++            index=self.jaw_joint_index_offset,
+         )
+ 
+         # Add CollisionModel, and RigidMapping to jaw 1
+@@ -275,7 +291,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+         self.collision_node_jaw_1.addObject(
+             "RigidMapping",
+             input=self.joint_mechanical_object.getLinkPath(),
+-            index=2,
++            index=self.jaw_joint_index_offset + 1,
+         )
+ 
+         # Create ContactListener between the SphereCollisionModel of the jaws and the SphereCollisionModel of the rope
+@@ -308,7 +324,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+                 **extra_collision_kwargs,
+             )
+         )
+-        gripper_backside_jaw_0.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=1)
++        gripper_backside_jaw_0.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=self.jaw_joint_index_offset)
+         self.gripper_backside_collision_models.append(
+             gripper_backside_jaw_1.addObject(
+                 "SphereCollisionModel",
+@@ -317,7 +333,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+                 **extra_collision_kwargs,
+             )
+         )
+-        gripper_backside_jaw_1.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=2)
++        gripper_backside_jaw_1.addObject("RigidMapping", input=self.joint_mechanical_object.getLinkPath(), index=self.jaw_joint_index_offset + 1)
+ 
+         # When to trigger grasping
+         self.angle_to_grasp_threshold = angle_to_grasp_threshold
+@@ -435,12 +451,12 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+         with self.grasping_mechanical_object.position.writeable() as grasping_frames:
+             grasping_frames[:, :3] = self.motion_mapping_mechanical_object.position.array()
+             grasping_frames[:, 3:] = multiply_quaternions(
+-                self.motion_target_mechanical_object.position.array()[0, 3:],
++                self._grasp_reference_orientation(),
+                 self.orientation_delta,
+             )
+ 
+         # Check if angle is small enough to be grasping
+-        self.grasping_active = self.get_actual_angle() < self.angle_to_grasp_threshold
++        self.grasping_active = self.get_actual_jaw_opening() < self.angle_to_grasp_threshold
+         self.lost_grasp = False
+ 
+         if self.grasping_active and not self.grasp_established:
+@@ -456,10 +472,16 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+         elif self.grasping_active and self.grasp_established:
+             # Check if motion target and physical body deviate in the opening of the gripper,
+             # and release the grasp, if necessary
+-            if self.get_actual_angle() > self.angle_to_release_threshold:
++            if self.get_actual_jaw_opening() > self.angle_to_release_threshold:
+                 self._release_grasp()
+                 self.lost_grasp = True
+ 
++    def _grasp_reference_orientation(self) -> np.ndarray:
++        """Orientation the grasping frames follow: the wrist link with a wrist, the instrument's target pose without."""
++        if self.has_wrist:
++            return self.joint_mechanical_object.position.array()[1, 3:]
++        return self.motion_target_mechanical_object.position.array()[0, 3:]
++
+     def _release_grasp(self) -> None:
+         """Release the rope by setting all rope indices in the RestShapeSpringsForceField and their stiffness to zero."""
+         with self.grasping_force_field.stiffness.writeable() as stiffness, self.grasping_force_field.angularStiffness.writeable() as angular_stiffness:
+@@ -484,7 +506,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+             4. Set spring stiffnesses, if both jaws have valid collisions with the rope
+         """
+ 
+-        jaw_poses = self.joint_mechanical_object.position.array()[1:]
++        jaw_poses = self.joint_mechanical_object.position.array()[self.jaw_joint_index_offset :]
+         jaw_length = self.jaw_length
+         gripper_pose = self.get_physical_pose()
+ 
+@@ -535,7 +557,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+         if found_contacts_on_both_jaws:
+             # Calculate the new orientation difference between the rope, and the gripper's motion target
+             self.orientation_delta[:] = multiply_quaternions(
+-                conjugate_quaternion(self.motion_target_mechanical_object.position.array()[0, 3:].copy()),
++                conjugate_quaternion(self._grasp_reference_orientation().copy()),
+                 point_orientation,
+             )
+ 
+@@ -584,7 +606,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+     def get_articulated_state(self) -> np.ndarray:
+         """Gets the state of the instrument including the articulation angle withing the defined state limits."""
+         self.articulated_state[:4] = self.ptsd_state
+-        self.articulated_state[-1] = self.get_angle()
++        self.articulated_state[-1] = np.squeeze(self.get_angle())
+         read_only_state = self.articulated_state.view()
+         read_only_state.flags.writeable = False
+         return read_only_state
+@@ -756,7 +778,7 @@ class ArticulatedGripper(Sofa.Core.Controller, ArticulatedInstrument):
+                 # Recalculate orientation delta between gripper and rope
+                 self.orientation_delta[:] = multiply_quaternions(
+                     conjugate_quaternion(self.rope.get_reset_state()[new_index_on_rope, 3:].copy()),
+-                    self.motion_target_mechanical_object.position.array()[0, 3:],
++                    self._grasp_reference_orientation(),
+                 )
+                 # Find the quaternion, that rotates the transformed (by orientation_delta) y axis into the original y axis.
+                 transformed_y_axis = rotated_y_axis(self.orientation_delta)
+diff --git a/sofa_env/scenes/search_for_point/search_for_point_env.py b/sofa_env/scenes/search_for_point/search_for_point_env.py
+index 85f287e..997b3dc 100644
+--- a/sofa_env/scenes/search_for_point/search_for_point_env.py
++++ b/sofa_env/scenes/search_for_point/search_for_point_env.py
+@@ -236,7 +236,7 @@ class SearchForPointEnv(SofaEnv):
+                 if not len(maximum_state_velocity) == camera_action_dimensionality:
+                     raise ValueError(f"If you want to use individual maximal state limits, please pass an array of length {camera_action_dimensionality} as maximum_state_velocity. Received {maximum_state_velocity=} with lenght {len(maximum_state_velocity)}.")
+             self.camera_max_state_velocity = maximum_state_velocity
+-            self.cauter_max_state_velocity = np.NaN
++            self.cauter_max_state_velocity = np.nan
+ 
+         self.action_type = action_type
+         # Continuous action
+diff --git a/sofa_env/scenes/tissue_manipulation/sofa_objects/visual_target.py b/sofa_env/scenes/tissue_manipulation/sofa_objects/visual_target.py
+index 131ac9b..a88c1d8 100644
+--- a/sofa_env/scenes/tissue_manipulation/sofa_objects/visual_target.py
++++ b/sofa_env/scenes/tissue_manipulation/sofa_objects/visual_target.py
+@@ -63,4 +63,4 @@ class VisualTarget(ControllableRigidObject):
+ 
+     def set_visibility(self, val: bool) -> None:
+         """Activate / Deactivate visibility of VisualTarget."""
+-        self.visual_model_node.OglModel.isEnabled.value = int(val)
++        self.visual_model_node.OglModel.enable.value = int(val)
+diff --git a/sofa_env/scenes/tissue_retraction/sofa_objects/end_effector.py b/sofa_env/scenes/tissue_retraction/sofa_objects/end_effector.py
+index 0fe8005..728937d 100644
+--- a/sofa_env/scenes/tissue_retraction/sofa_objects/end_effector.py
++++ b/sofa_env/scenes/tissue_retraction/sofa_objects/end_effector.py
+@@ -153,11 +153,11 @@ class EndEffector(Sofa.Core.Controller):
+         )
+ 
+         if self.has_actual_grasp:
+-            self.visual_model_node_open.OglModel.isEnabled = False
+-            self.visual_model_node_closed.OglModel.isEnabled = True
++            self.visual_model_node_open.OglModel.enable = False
++            self.visual_model_node_closed.OglModel.enable = True
+         else:
+-            self.visual_model_node_open.OglModel.isEnabled = True
+-            self.visual_model_node_closed.OglModel.isEnabled = False
++            self.visual_model_node_open.OglModel.enable = True
++            self.visual_model_node_closed.OglModel.enable = False
+ 
+         # Add the PSM main link
+         if visual_mesh_path_main_link is not None:
+@@ -297,11 +297,11 @@ class EndEffector(Sofa.Core.Controller):
+ 
+         # Activate the correct visual model of open or closed gripper
+         if self.has_actual_grasp:
+-            self.visual_model_node_open.OglModel.isEnabled = False
+-            self.visual_model_node_closed.OglModel.isEnabled = True
++            self.visual_model_node_open.OglModel.enable = False
++            self.visual_model_node_closed.OglModel.enable = True
+         else:
+-            self.visual_model_node_open.OglModel.isEnabled = True
+-            self.visual_model_node_closed.OglModel.isEnabled = False
++            self.visual_model_node_open.OglModel.enable = True
++            self.visual_model_node_closed.OglModel.enable = False
+ 
+     def create_linear_motion(
+         self,
+diff --git a/sofa_env/sofa_templates/rigid.py b/sofa_env/sofa_templates/rigid.py
+index e2f7d34..9d162fc 100644
+--- a/sofa_env/sofa_templates/rigid.py
++++ b/sofa_env/sofa_templates/rigid.py
+@@ -125,7 +125,7 @@ class RigidObject:
+         if animation_loop_type == AnimationLoopType.FREEMOTION:
+             self.constraint_correction = self.node.addObject(
+                 ConstraintCorrectionType.UNCOUPLED.value,
+-                compliance=1.0 / total_mass if total_mass is not None else 1.0,
++                defaultCompliance=1.0 / total_mass if total_mass is not None else 1.0,
+             )
+ 
+         # Add collision models to the object
+@@ -281,7 +281,7 @@ class ControllableRigidObject:
+         if animation_loop_type == AnimationLoopType.FREEMOTION:
+             self.physical_body_node.addObject(
+                 ConstraintCorrectionType.UNCOUPLED.value,
+-                compliance=1.0 / total_mass if total_mass is not None else 1.0,
++                defaultCompliance=1.0 / total_mass if total_mass is not None else 1.0,
+             )
+ 
+         if not is_default_collision_model_function(add_collision_model_func):
+@@ -626,6 +626,10 @@ class ArticulatedInstrument:
+         angular_spring_stiffness (Optional[float]): Angular spring stiffness of the ``"RestShapeSpringsForceField"``.
+         articulation_spring_stiffness (Optional[float]): Spring stiffness of the ``"RestShapeSpringsForceField"`` of the articulation.
+         collision_group (int): The group for which collisions with this object should be ignored. Value has to be set since the jaws and shaft must belong to the same group.
++        wrist_axis (Optional[Tuple[int, int, int]]): Adds a wrist joint between the shaft and the jaws that rotates about this axis (e.g. the pitch joint of a da Vinci EndoWrist). ``None`` means no wrist.
++        wrist_to_jaw_distance (float): Distance along the shaft axis from the wrist joint to the jaw hinge.
++        wrist_angle_limits (Tuple[float, float]): Minimum and maximum wrist angle in degrees.
++        visual_mesh_path_wrist (Optional[Union[str, Path]]): Visual surface mesh of the link between the wrist joint and the jaw hinge.
+     """
+ 
+     def __init__(
+@@ -658,6 +662,10 @@ class ArticulatedInstrument:
+         angular_spring_stiffness: Optional[float] = 2e10,
+         articulation_spring_stiffness: Optional[float] = 1e12,
+         collision_group: int = 0,
++        wrist_axis: Optional[Tuple[int, int, int]] = None,
++        wrist_to_jaw_distance: float = 0.0,
++        wrist_angle_limits: Tuple[float, float] = (-90.0, 90.0),
++        visual_mesh_path_wrist: Optional[Union[str, Path]] = None,
+     ) -> None:
+         self.parent_node = parent_node
+         self.node = self.parent_node.addChild(name)
+@@ -672,6 +680,16 @@ class ArticulatedInstrument:
+         self.last_set_angle_violated_jaw_limits = False
+         self.two_jaws = two_jaws
+ 
++        # Articulation angles are stored as [wrist (optional), jaw 0, jaw 1 (optional)].
++        # Joint rigid frames are [shaft, wrist link (optional), jaw 0, jaw 1 (optional)].
++        self.has_wrist = wrist_axis is not None
++        self.jaw_angle_offset = 1 if self.has_wrist else 0
++        self.jaw_joint_index_offset = 1 + self.jaw_angle_offset
++        self.wrist_angle_limits = {"low": wrist_angle_limits[0], "high": wrist_angle_limits[1]}
++        jaw_angles = [float(np.deg2rad(angle)), -float(np.deg2rad(angle))] if two_jaws else [float(np.deg2rad(angle))]
++        initial_articulation_angles = ([0.0] if self.has_wrist else []) + jaw_angles
++        number_of_articulation_angles = len(initial_articulation_angles)
++
+         # Add the solvers
+         self.time_integration, self.linear_solver = add_solver_func(attached_to=self.node)
+ 
+@@ -681,7 +699,7 @@ class ArticulatedInstrument:
+         self.angle_motion_target_mechanical_object = self.angle_motion_target_node.addObject(
+             "MechanicalObject",
+             template="Vec1d",
+-            position=[float(angle), -float(angle)] if two_jaws else [float(angle)],
++            position=initial_articulation_angles,
+         )
+ 
+         # Add controllable part without collision or visual model
+@@ -733,7 +751,7 @@ class ArticulatedInstrument:
+         if animation_loop_type == AnimationLoopType.FREEMOTION:
+             self.physical_shaft_node.addObject(
+                 ConstraintCorrectionType.UNCOUPLED.value,
+-                compliance=1.0 / total_mass if total_mass is not None else 1.0,
++                defaultCompliance=1.0 / total_mass if total_mass is not None else 1.0,
+             )
+ 
+         if visual_mesh_path_shaft is not None:
+@@ -767,36 +785,48 @@ class ArticulatedInstrument:
+         self.angle_mechanical_object = self.articulation_description_node.addObject(
+             "MechanicalObject",
+             template="Vec1d",
+-            position=[float(angle), -float(angle)] if two_jaws else [float(angle)],
++            position=initial_articulation_angles,
+         )
++        if self.has_wrist:
++            self.articulation_description_node.addObject(
++                "StopperLagrangianConstraint",
++                name="angle_limit_wrist",
++                min=float(np.deg2rad(wrist_angle_limits[0])),
++                max=float(np.deg2rad(wrist_angle_limits[1])),
++                index=0,
++            )
+         if two_jaws:
++            # With a wrist the jaws also turn together (yaw), so each jaw may go to either side.
++            jaw_0_low = -angle_limits["high"] if self.has_wrist else angle_limits["low"]
++            jaw_1_high = angle_limits["high"] if self.has_wrist else -angle_limits["low"]
+             self.articulation_description_node.addObject(
+                 "StopperLagrangianConstraint",
+                 name="angle_limit_jaw_0",
+-                min=angle_limits["low"],
++                min=jaw_0_low,
+                 max=angle_limits["high"],
+-                index=0,
++                index=self.jaw_angle_offset,
+             )
+ 
+             self.articulation_description_node.addObject(
+                 "StopperLagrangianConstraint",
+                 name="angle_limit_jaw_1",
+                 min=-angle_limits["high"],
+-                max=-angle_limits["low"],
+-                index=1,
++                max=jaw_1_high,
++                index=self.jaw_angle_offset + 1,
+             )
+         else:
+             self.articulation_description_node.addObject(
+                 "StopperLagrangianConstraint",
+                 min=-angle_limits["high"],
+                 max=-angle_limits["low"],
++                index=self.jaw_angle_offset,
+             )
+ 
+         # If using the FreeMotionAnimationLoop add a constraint correction object
+         if animation_loop_type == AnimationLoopType.FREEMOTION:
+             self.articulation_description_node.addObject(
+                 ConstraintCorrectionType.UNCOUPLED.value,
+-                compliance=1.0 / total_mass if total_mass is not None else 1.0,
++                defaultCompliance=1.0 / total_mass if total_mass is not None else 1.0,
+             )
+ 
+         if spring_stiffness is None and angular_spring_stiffness is None:
+@@ -807,14 +837,14 @@ class ArticulatedInstrument:
+             stiffness=articulation_spring_stiffness,
+             angularStiffness=articulation_spring_stiffness,
+             external_rest_shape=self.angle_motion_target_mechanical_object.getLinkPath(),
+-            points=[0, 1] if two_jaws else 0,
+-            external_points=[0, 1] if two_jaws else 0,
++            points=list(range(number_of_articulation_angles)),
++            external_points=list(range(number_of_articulation_angles)),
+             drawSpring=show_object,
+         )
+ 
+         self.joint = self.articulation_description_node.addChild("joint")
+ 
+-        number_of_rigid_objects = 3 if two_jaws else 2
++        number_of_rigid_objects = 1 + number_of_articulation_angles
+ 
+         self.joint_mechanical_object = self.joint.addObject(
+             "MechanicalObject",
+@@ -831,39 +861,61 @@ class ArticulatedInstrument:
+             output=self.joint_mechanical_object.getLinkPath(),
+         )
+ 
++        if sum(rotation_axis) != 1:
++            raise ValueError(f"Only one axis can be set as rotation axis of the articulation. E.g. ([1, 0, 0] for rotation around the X-axis). Received {rotation_axis=}")
++        if self.has_wrist and sum(wrist_axis) != 1:
++            raise ValueError(f"Only one axis can be set as the wrist axis. Received {wrist_axis=}")
++
++        # (node name, parent frame, child frame, position on parent, rotation axis, angle index)
++        articulations = []
++        if self.has_wrist:
++            articulations.append(("articulation_center_wrist", 0, 1, [0, 0, 0], wrist_axis, 0))
++        jaw_parent = 1 if self.has_wrist else 0
++        jaw_hinge = [0, 0, wrist_to_jaw_distance] if self.has_wrist else [0, 0, 0]
++        for index in range(2 if two_jaws else 1):
++            articulations.append((f"articulation_center_{index}", jaw_parent, self.jaw_joint_index_offset + index, jaw_hinge, rotation_axis, self.jaw_angle_offset + index))
++
+         self.articulation_center_nodes = []
+         self.articulation_nodes = []
+-        for index in range(2 if two_jaws else 1):
++        for node_name, parent_index, child_index, position_on_parent, axis, angle_index in articulations:
+             # New node in the hierarchy
+-            self.articulation_center_nodes.append(self.joint.addChild(f"articulation_center_{index}"))
++            center_node = self.joint.addChild(node_name)
++            self.articulation_center_nodes.append(center_node)
+ 
+             # Add the articulation center to the hierarchy
+-            self.articulation_center_nodes[index].addObject(
++            center_node.addObject(
+                 "ArticulationCenter",
+-                parentIndex=0,
+-                childIndex=index + 1,
+-                posOnParent=[0, 0, 0],
++                parentIndex=parent_index,
++                childIndex=child_index,
++                posOnParent=position_on_parent,
+                 posOnChild=[0, 0, 0],
+             )
+ 
+             # Add a child of the center that holds the actual articulation
+-            self.articulation_nodes.append(self.articulation_center_nodes[index].addChild("articulation"))
+-
+-            # Add the articulation object to the articulation node
+-            if sum(rotation_axis) != 1:
+-                raise ValueError(f"Only one axis can be set as rotation axis of the articulation. E.g. ([1, 0, 0] for rotation around the X-axis). Received {rotation_axis=}")
+-            self.articulation_nodes[index].addObject(
++            articulation_node = center_node.addChild("articulation")
++            self.articulation_nodes.append(articulation_node)
++            articulation_node.addObject(
+                 "Articulation",
+                 translation=False,
+                 rotation=True,
+-                rotationAxis=rotation_axis,
+-                articulationIndex=index,
++                rotationAxis=axis,
++                articulationIndex=angle_index,
+             )
+ 
+         self.articulation_description_node.addObject("ArticulatedHierarchyContainer")
+ 
+         self.physical_jaw_node = self.node.addChild("physical_jaw")
+ 
++        if self.has_wrist and visual_mesh_path_wrist is not None:
++            self.wrist_visual_model_node = add_visual_model_func(
++                attached_to=self.physical_jaw_node,
++                name="visual_wrist",
++                surface_mesh_file_path=visual_mesh_path_wrist,
++                mapping_type=MappingType.RIGID,
++                mapping_kwargs={"input": self.joint_mechanical_object.getLinkPath(), "index": 1},
++                scale=scale,
++            )
++
+         if visual_mesh_paths_jaws is not None:
+             if not len(visual_mesh_paths_jaws) in (1, 2):
+                 raise ValueError(f"Received the wrong number of paths to visual meshes for the instrument jaws. For {two_jaws=} please pass {1 if two_jaws else 2} paths. Received {len(visual_mesh_paths_jaws)}.")
+@@ -879,7 +931,7 @@ class ArticulatedInstrument:
+                     name=f"visual_jaw_{index}",
+                     surface_mesh_file_path=visual_mesh_path,
+                     mapping_type=MappingType.RIGID,
+-                    mapping_kwargs={"input": self.joint_mechanical_object.getLinkPath(), "index": index + 1},
++                    mapping_kwargs={"input": self.joint_mechanical_object.getLinkPath(), "index": self.jaw_joint_index_offset + index},
+                     scale=scale,
+                 )
+             )
+@@ -908,7 +960,7 @@ class ArticulatedInstrument:
+                                 surface_mesh_file_path=collision_mesh_paths_jaws[index],
+                                 scale=scale,
+                                 mapping_type=MappingType.RIGID,
+-                                mapping_kwargs={"input": self.joint_mechanical_object.getLinkPath(), "index": index + 1},
++                                mapping_kwargs={"input": self.joint_mechanical_object.getLinkPath(), "index": self.jaw_joint_index_offset + index},
+                                 collision_group=collision_group,
+                             )
+                         )
+@@ -978,17 +1030,17 @@ class ArticulatedInstrument:
+ 
+     def get_angle_difference(self) -> Union[float, np.ndarray]:
+         """Reads the Vec1d valuef from both motion target and body and returns the difference between the two."""
+-        target_angles = np.rad2deg(self.angle_motion_target_mechanical_object.position.array()[0])
+-        actual_angles = np.rad2deg(self.angle_mechanical_object.position.array()[0])
++        target_angles = np.rad2deg(self.angle_motion_target_mechanical_object.position.array()[self.jaw_angle_offset])
++        actual_angles = np.rad2deg(self.angle_mechanical_object.position.array()[self.jaw_angle_offset])
+         return target_angles - actual_angles
+ 
+     def get_angle(self) -> float:
+         """Reads the Vec1d value of the controllable part of the angle and returns it as degrees."""
+-        return np.rad2deg(self.angle_motion_target_mechanical_object.position.array()[0])
++        return np.rad2deg(self.angle_motion_target_mechanical_object.position.array()[self.jaw_angle_offset])
+ 
+     def get_actual_angle(self) -> float:
+         """Reads the Vec1d value of the physical part of the angle and returns it as degrees."""
+-        return np.rad2deg(self.angle_mechanical_object.position.array()[0])
++        return np.rad2deg(self.angle_mechanical_object.position.array()[self.jaw_angle_offset])
+ 
+     def set_angle(self, angle: float) -> None:
+         """Writes the Vec1d value of the controllable part of the angle as degrees.
+@@ -998,13 +1050,59 @@ class ArticulatedInstrument:
+         """
+         if self.angle_limits["low"] <= angle <= self.angle_limits["high"]:
+             with self.angle_motion_target_mechanical_object.position.writeable() as sofa_angle:
+-                sofa_angle[0] = np.deg2rad(angle)
++                sofa_angle[self.jaw_angle_offset] = np.deg2rad(angle)
+                 if self.two_jaws:
+-                    sofa_angle[1] = -np.deg2rad(angle)
++                    sofa_angle[self.jaw_angle_offset + 1] = -np.deg2rad(angle)
+             self.last_set_angle_violated_jaw_limits = False
+         else:
+             self.last_set_angle_violated_jaw_limits = True
+ 
++    def get_jaw_angles(self) -> np.ndarray:
++        """Target angles of the jaws in degrees, [jaw 0] or [jaw 0, jaw 1]. When both jaws open symmetrically by ``a``, this is [a, -a]."""
++        return np.rad2deg(self.angle_motion_target_mechanical_object.position.array()[self.jaw_angle_offset :, 0].copy())
++
++    def get_jaw_opening(self) -> float:
++        """Half the angle between the two jaws in degrees (equal to ``get_angle()`` when they open symmetrically)."""
++        jaw_angles = self.get_jaw_angles()
++        if self.two_jaws:
++            return float(jaw_angles[0] - jaw_angles[1]) / 2.0
++        return float(jaw_angles[0])
++
++    def get_actual_jaw_opening(self) -> float:
++        """Like ``get_jaw_opening``, but from the physical jaws instead of the target angles (equal to
++        ``get_actual_angle()`` when they open symmetrically)."""
++        jaw_angles = np.rad2deg(self.angle_mechanical_object.position.array()[self.jaw_angle_offset :, 0])
++        if self.two_jaws:
++            return float(jaw_angles[0] - jaw_angles[1]) / 2.0
++        return float(jaw_angles[0])
++
++    def set_jaw_angles(self, jaw_0: float, jaw_1: float) -> None:
++        """Sets the two jaws independently, in degrees. Their mean turns both jaws together (the yaw of a wristed
++        instrument), their difference opens and closes them. Each jaw is limited to +-(``angle_limits`` high)."""
++        if not self.two_jaws:
++            raise ValueError("set_jaw_angles needs an instrument with two jaws.")
++        limit = self.angle_limits["high"]
++        # Jaw 0 opens to positive angles and jaw 1 to negative ones; they must not pass through each other.
++        if jaw_0 < jaw_1:
++            jaw_0 = jaw_1 = (jaw_0 + jaw_1) / 2.0
++        with self.angle_motion_target_mechanical_object.position.writeable() as sofa_angle:
++            sofa_angle[self.jaw_angle_offset] = np.deg2rad(np.clip(jaw_0, -limit, limit))
++            sofa_angle[self.jaw_angle_offset + 1] = np.deg2rad(np.clip(jaw_1, -limit, limit))
++
++    def get_wrist_angle(self) -> float:
++        """Target wrist angle in degrees."""
++        if not self.has_wrist:
++            return 0.0
++        return float(np.rad2deg(self.angle_motion_target_mechanical_object.position.array()[0, 0]))
++
++    def set_wrist_angle(self, angle: float) -> None:
++        """Sets the wrist angle in degrees, clipped to ``wrist_angle_limits``."""
++        if not self.has_wrist:
++            raise ValueError("This instrument has no wrist.")
++        angle = np.clip(angle, self.wrist_angle_limits["low"], self.wrist_angle_limits["high"])
++        with self.angle_motion_target_mechanical_object.position.writeable() as sofa_angle:
++            sofa_angle[0] = np.deg2rad(angle)
++
+ 
+ class PivotizedArticulatedInstrument(ArticulatedInstrument):
+     """Extends the ArticulatedInstrument with pivotized motion.
+@@ -1089,6 +1187,10 @@ class PivotizedArticulatedInstrument(ArticulatedInstrument):
+         },
+         show_remote_center_of_motion: bool = False,
+         show_workspace: bool = False,
++        wrist_axis: Optional[Tuple[int, int, int]] = None,
++        wrist_to_jaw_distance: float = 0.0,
++        wrist_angle_limits: Tuple[float, float] = (-90.0, 90.0),
++        visual_mesh_path_wrist: Optional[Union[str, Path]] = None,
+     ) -> None:
+ 
+         if not isinstance(rcm_pose, np.ndarray) and not rcm_pose.shape == (6,):
+@@ -1145,6 +1247,10 @@ class PivotizedArticulatedInstrument(ArticulatedInstrument):
+             angular_spring_stiffness=angular_spring_stiffness,
+             articulation_spring_stiffness=articulation_spring_stiffness,
+             collision_group=collision_group,
++            wrist_axis=wrist_axis,
++            wrist_to_jaw_distance=wrist_to_jaw_distance,
++            wrist_angle_limits=wrist_angle_limits,
++            visual_mesh_path_wrist=visual_mesh_path_wrist,
+         )
+ 
+         self.show_remote_center_of_motion = show_remote_center_of_motion
+@@ -1178,7 +1284,7 @@ class PivotizedArticulatedInstrument(ArticulatedInstrument):
+     def get_articulated_state(self) -> np.ndarray:
+         """Gets the state of the instrument including the articulation angle withing the defined state limits."""
+         self.articulated_state[:4] = self.ptsd_state
+-        self.articulated_state[-1] = self.get_angle()
++        self.articulated_state[-1] = np.squeeze(self.get_angle())
+         read_only_state = self.articulated_state.view()
+         read_only_state.flags.writeable = False
+         return read_only_state
+diff --git a/sofa_env/sofa_templates/scene_header.py b/sofa_env/sofa_templates/scene_header.py
+index b121251..7260c3d 100644
+--- a/sofa_env/sofa_templates/scene_header.py
++++ b/sofa_env/sofa_templates/scene_header.py
+@@ -92,7 +92,7 @@ class ConstraintSolverType(Enum):
+     """
+ 
+     AUTOMATIC = "ConstraintSolver"
+-    GENERIC = "GenericConstraintSolver"
++    GENERIC = "BlockGaussSeidelConstraintSolver"  # GenericConstraintSolver was split up in SOFA v25.06; this is its default Gauss-Seidel resolution
+     LCP = "LCPConstraintSolver"
+ 
+ 
+diff --git a/sofa_env/wrappers/rrt.py b/sofa_env/wrappers/rrt.py
+index f1e324d..1f1f5d4 100644
+--- a/sofa_env/wrappers/rrt.py
++++ b/sofa_env/wrappers/rrt.py
+@@ -363,7 +363,7 @@ class RRTMotionPlanningWrapper(gym.Wrapper):
+             instrument_name (str): The name of the instrument to draw the RRT graph for.
+         """
+         if self.nodes.get(instrument_name, None) is not None:
+-            self.nodes[instrument_name].OglModel.isEnabled = False
++            self.nodes[instrument_name].OglModel.enable = False
+         self.path_visual = self.env._sofa_root_node.addChild("beam_visual")
+         path = self.paths[instrument_name]
+         path_edges = [(path[i], path[i + 1]) for i in range(len(self.paths[instrument_name]) - 1)]
+diff --git a/sofa_env/scenes/grasp_lift_touch/meshes/wrist_link.obj b/sofa_env/scenes/grasp_lift_touch/meshes/wrist_link.obj
+new file mode 100644
+index 0000000..27f6856
+--- /dev/null
++++ b/sofa_env/scenes/grasp_lift_touch/meshes/wrist_link.obj
+@@ -0,0 +1,147 @@
++# Wrist link of the EndoWrist-like instrument: cylinder r=2.2 mm from z=-1 to z=9 mm
++v 2.2000 0.0000 -1.0000
++v 2.1250 0.5694 -1.0000
++v 1.9053 1.1000 -1.0000
++v 1.5556 1.5556 -1.0000
++v 1.1000 1.9053 -1.0000
++v 0.5694 2.1250 -1.0000
++v 0.0000 2.2000 -1.0000
++v -0.5694 2.1250 -1.0000
++v -1.1000 1.9053 -1.0000
++v -1.5556 1.5556 -1.0000
++v -1.9053 1.1000 -1.0000
++v -2.1250 0.5694 -1.0000
++v -2.2000 0.0000 -1.0000
++v -2.1250 -0.5694 -1.0000
++v -1.9053 -1.1000 -1.0000
++v -1.5556 -1.5556 -1.0000
++v -1.1000 -1.9053 -1.0000
++v -0.5694 -2.1250 -1.0000
++v -0.0000 -2.2000 -1.0000
++v 0.5694 -2.1250 -1.0000
++v 1.1000 -1.9053 -1.0000
++v 1.5556 -1.5556 -1.0000
++v 1.9053 -1.1000 -1.0000
++v 2.1250 -0.5694 -1.0000
++v 2.2000 0.0000 9.0000
++v 2.1250 0.5694 9.0000
++v 1.9053 1.1000 9.0000
++v 1.5556 1.5556 9.0000
++v 1.1000 1.9053 9.0000
++v 0.5694 2.1250 9.0000
++v 0.0000 2.2000 9.0000
++v -0.5694 2.1250 9.0000
++v -1.1000 1.9053 9.0000
++v -1.5556 1.5556 9.0000
++v -1.9053 1.1000 9.0000
++v -2.1250 0.5694 9.0000
++v -2.2000 0.0000 9.0000
++v -2.1250 -0.5694 9.0000
++v -1.9053 -1.1000 9.0000
++v -1.5556 -1.5556 9.0000
++v -1.1000 -1.9053 9.0000
++v -0.5694 -2.1250 9.0000
++v -0.0000 -2.2000 9.0000
++v 0.5694 -2.1250 9.0000
++v 1.1000 -1.9053 9.0000
++v 1.5556 -1.5556 9.0000
++v 1.9053 -1.1000 9.0000
++v 2.1250 -0.5694 9.0000
++v 0.0000 0.0000 -1.0000
++v 0.0000 0.0000 9.0000
++f 1 2 26
++f 1 26 25
++f 49 2 1
++f 50 25 26
++f 2 3 27
++f 2 27 26
++f 49 3 2
++f 50 26 27
++f 3 4 28
++f 3 28 27
++f 49 4 3
++f 50 27 28
++f 4 5 29
++f 4 29 28
++f 49 5 4
++f 50 28 29
++f 5 6 30
++f 5 30 29
++f 49 6 5
++f 50 29 30
++f 6 7 31
++f 6 31 30
++f 49 7 6
++f 50 30 31
++f 7 8 32
++f 7 32 31
++f 49 8 7
++f 50 31 32
++f 8 9 33
++f 8 33 32
++f 49 9 8
++f 50 32 33
++f 9 10 34
++f 9 34 33
++f 49 10 9
++f 50 33 34
++f 10 11 35
++f 10 35 34
++f 49 11 10
++f 50 34 35
++f 11 12 36
++f 11 36 35
++f 49 12 11
++f 50 35 36
++f 12 13 37
++f 12 37 36
++f 49 13 12
++f 50 36 37
++f 13 14 38
++f 13 38 37
++f 49 14 13
++f 50 37 38
++f 14 15 39
++f 14 39 38
++f 49 15 14
++f 50 38 39
++f 15 16 40
++f 15 40 39
++f 49 16 15
++f 50 39 40
++f 16 17 41
++f 16 41 40
++f 49 17 16
++f 50 40 41
++f 17 18 42
++f 17 42 41
++f 49 18 17
++f 50 41 42
++f 18 19 43
++f 18 43 42
++f 49 19 18
++f 50 42 43
++f 19 20 44
++f 19 44 43
++f 49 20 19
++f 50 43 44
++f 20 21 45
++f 20 45 44
++f 49 21 20
++f 50 44 45
++f 21 22 46
++f 21 46 45
++f 49 22 21
++f 50 45 46
++f 22 23 47
++f 22 47 46
++f 49 23 22
++f 50 46 47
++f 23 24 48
++f 23 48 47
++f 49 24 23
++f 50 47 48
++f 24 1 25
++f 24 25 48
++f 49 1 24
++f 50 48 25

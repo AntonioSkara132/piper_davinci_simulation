@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Python 3.12 from the SOFA virtual environment, with the SOFA v25.12 Python bindings on the path.
+# ROS 2 Jazzy is not loaded here: the SOFA side talks to ROS only through the UDP bridge.
+export SOFA_ROOT=/opt/sofa
+export PYTHONPATH=$SOFA_ROOT/plugins/SofaPython3/lib/python3/site-packages
+exec /opt/sofa_venv/bin/python "$@"
