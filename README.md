@@ -53,6 +53,31 @@ Sve radi u [tmux](https://github.com/tmux/tmux/wiki) sesiji `davinci_piper` ([kr
 tmux kill-session -t davinci_piper
 ```
 
+## Adapter i instrument
+Model robota je [docker/davinci/piper_davinci.urdf.xacro](docker/davinci/piper_davinci.urdf.xacro) ([xacro](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/URDF/Using-Xacro-to-Clean-Up-a-URDF-File.html), [URDF](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/URDF/URDF-Main.html)). Uključuje službeni model Pipera iz `agx_arm_description` i na njegov zadnji link `link6` dodaje adapter i instrument fiksnim zglobovima:
+
+```
+link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
+         (prirubnica)   (STL adaptera)   └─ instrument_shaft ── instrument_wrist
+```
+
+- **Adapter** je CAD model iz [repozitorija adaptera](https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments). Docker ga preuzima tijekom izgradnje u `/root/davinci_piper/meshes/davinci_si_adapter.stl`. STL je u milimetrima, pa ima `scale="0.001 0.001 0.001"`. Zglob `adapter_mount` podiže ga za debljinu prirubnice (10.5 mm) i zakreće za 90° oko osi x, tako da ploča za montažu leži na prirubnici.
+- **Instrument** nije u CAD modelu, pa su kućište (kvadar) i osovina (valjak) procijenjeni. Dimenzije su xacro svojstva na vrhu datoteke (`housing_size`, `shaft_length`, ...).
+- **`instrument_wrist`** je okvir na kraju osovine. Os z gleda duž osovine, a os x je os zgloba čeljusti. Samo taj okvir povezuje ruku sa SOFA-om: `piper_tool_bridge.py` šalje njegovu pozu SOFA-i, a upravljanje tipkama pomiče upravo njega.
+
+### Vlastiti adapter
+1. Stavite STL svog adaptera u `docker/davinci/meshes/`, npr. `docker/davinci/meshes/moj_adapter.stl`. Dockerfile kopira mapu `davinci` u `/root/davinci_piper/`.
+2. U `piper_davinci.urdf.xacro` promijenite putanju u linku `davinci_adapter` na `${mesh_dir}/moj_adapter.stl`. Ako je STL u metrima, stavite `scale="1 1 1"`.
+3. Promijenite `origin` zgloba `adapter_mount` tako da ploča adaptera leži na prirubnici: `xyz` je pomak, a `rpy` zakret (u radijanima) okvira vašeg CAD modela u odnosu na prirubnicu.
+4. Promijenite svojstva instrumenta, a posebno `shaft_axis_y`, `shaft_start_z` i `shaft_length`, tako da `instrument_wrist` bude na vrhu vašeg instrumenta.
+5. Provjerite model i pogledajte ga u RViz-u (u RViz-u uključite TF da vidite okvire):
+   ```bash
+   xacro /root/davinci_piper/piper_davinci.urdf.xacro > /tmp/robot.urdf && check_urdf /tmp/robot.urdf
+   run_davinci_piper --rings --sliders
+   ```
+
+Dok isprobavate, datoteke možete mijenjati izravno u kontejneru (`/root/davinci_piper/`) ili ih kopirati s `docker cp`. Kad je model gotov, ponovno izgradite sliku. Upravljanje tipkama čita model iz `robot_description`, pa radi s novim adapterom bez promjena. Ako je vaš instrument znatno duži ili kraći, promijenite početnu pozu `READY_POSE` u [piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py), jer o njoj ovisi koliko ruka može doseći.
+
 ## Stvarna ruka
 > [!CAUTION]
 > Nije testirano. Slijedite [AgileX upute](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) i držite tipku za zaustavljanje u nuždi pri ruci.
