@@ -1,18 +1,23 @@
 <?xml version="1.0"?>
 <!--
-  AgileX Piper with the open-platform da Vinci Si instrument adaptor on its flange
-  (https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments),
-  carrying an 8 mm da Vinci Si instrument.
+  AgileX Piper with a da Vinci Si instrument adaptor on its flange, carrying an 8 mm da Vinci Si
+  instrument.
 
   Load it with:
     ros2 launch agx_arm_description display.launch.py custom_model:=/root/davinci_piper/piper_davinci.urdf.xacro
 
-  The adaptor mesh is the CAD assembly from the repository (millimetres). In its own frame:
+  The adaptor mesh is not included: put your adaptor's STL in docker/davinci/meshes/ and add it as
+  the visual of the davinci_adapter link below (see the comment there). Until then RViz shows the
+  instrument without the adaptor.
+
+  The davinci_adapter frame and the instrument offsets below are set for the open-platform adaptor
+  (https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments), whose CAD frame is:
     - the mounting plate is the face at y = -9.1 mm, between two side walls that reach y = -25.4 mm;
     - the four drive discs face +y, and the instrument housing sits on them;
     - the housing's long axis is z, and the instrument shaft leaves the housing towards +z.
-  The instrument itself is not in the CAD. Its housing, shaft length and shaft height are
-  estimates of a da Vinci Si EndoWrist instrument; change the properties below to match yours.
+  For another adaptor, change adapter_plate_y, the adapter_mount joint and the instrument properties.
+  The instrument housing, shaft length and shaft height are estimates of a da Vinci Si EndoWrist
+  instrument.
 
   instrument_wrist is the frame the SOFA simulation follows: its origin is the wrist at the end of
   the shaft, z points along the shaft out of the instrument, x is the jaw hinge axis.
@@ -49,12 +54,14 @@
   <!-- Adaptor frame = CAD frame. Rotating +90 deg about x puts the CAD +y (away from the plate)
        along the flange z axis, and the instrument direction (+z) along the flange -y axis. -->
   <link name="davinci_adapter">
+    <!-- Add your adaptor's mesh here, e.g. for docker/davinci/meshes/my_adapter.stl in millimetres:
     <visual>
       <geometry>
-        <mesh filename="${mesh_dir}/davinci_si_adapter.stl" scale="0.001 0.001 0.001"/>
+        <mesh filename="${mesh_dir}/my_adapter.stl" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="adapter_grey"><color rgba="0.75 0.77 0.82 1"/></material>
     </visual>
+    -->
     <inertial>
       <mass value="0.6"/>
       <origin xyz="0 0.03 0"/>

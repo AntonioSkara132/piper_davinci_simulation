@@ -4,7 +4,7 @@
 # Build:  docker build -t piper-jazzy .
 # Run:    ./run_piper.sh            (see that script for the docker run options)
 #
-# The driver, SDK, SOFA, LapGym and the adaptor model are pinned to the versions these
+# The driver, SDK, SOFA and LapGym are pinned to the versions these
 # instructions were tested with.
 # To use the newest versions instead:
 #   docker build -t piper-jazzy --build-arg AGX_ARM_ROS_REF=ros2 --build-arg PYAGXARM_REF=main .
@@ -107,16 +107,12 @@ RUN if [ "$WITH_SOFA" = "true" ]; then \
 # Piper with the da Vinci adaptor (URDF, keyboard Cartesian control, pose bridge to SOFA) and its
 # launcher run_davinci_piper. The launcher opens a terminal (xterm) and arranges the windows
 # on screen with wmctrl and xprop (x11-utils).
-# The adaptor mesh is the CAD model from the open-platform adaptor repository (GPL-3.0), downloaded
-# here instead of being copied into this repository.
-ARG ADAPTOR_REF=17e32f2ae6f6877831ebaec4b8f49800bb7edabe
+# The adaptor mesh is not included; students put their own STL in davinci/meshes/.
 COPY davinci/ /root/davinci_piper/
 RUN if [ "$WITH_SOFA" = "true" ]; then \
         apt-get update && apt-get install -y --no-install-recommends xterm wmctrl x11-utils \
         && rm -rf /var/lib/apt/lists/* \
         && mkdir -p /root/davinci_piper/meshes \
-        && wget -q -O /root/davinci_piper/meshes/davinci_si_adapter.stl \
-            "https://raw.githubusercontent.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments/$ADAPTOR_REF/Da%20vinci%20si%20manipulator.stl" \
         && chmod 755 /root/davinci_piper/*.sh /root/davinci_piper/*.py \
         && ln -s /root/davinci_piper/run_davinci_piper.sh /usr/local/bin/run_davinci_piper ; \
     fi

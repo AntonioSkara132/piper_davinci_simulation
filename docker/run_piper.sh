@@ -15,16 +15,19 @@ NAME=piper-jazzy
 xhost +local: > /dev/null
 
 if ! docker container inspect "$NAME" > /dev/null 2>&1; then
+    GPU=()
+    [ -e /dev/dri ] && GPU=(--device /dev/dri)
     # --net=host:      ROS 2 topics reach the host, and the container sees the host's can0
     # --privileged:    needed to bring the CAN interface up from inside the container
     # DISPLAY + X11:   RViz and the joint slider window open on the host desktop
-    # /dev/dri:        hardware OpenGL for RViz and SOFA
+    # /dev/dri:        hardware OpenGL for RViz and SOFA, when the computer has it (WSL2 usually
+    #                  does not; then RViz and SOFA use software OpenGL)
     # core=0:          a crashing process exits at once instead of writing a core dump
     docker run -d --name "$NAME" \
         --net=host --privileged --ulimit core=0 \
         -e DISPLAY="$DISPLAY" \
         -v /tmp/.X11-unix:/tmp/.X11-unix \
-        --device /dev/dri \
+        "${GPU[@]}" \
         "$IMAGE" sleep infinity > /dev/null
 else
     if [ "$(docker container inspect -f '{{.Image}}' "$NAME")" != "$(docker image inspect -f '{{.Id}}' "$IMAGE")" ]; then

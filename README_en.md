@@ -1,7 +1,7 @@
 Click in the upper right corner for Table of Contents ↗️ | [Hrvatska verzija](README.md)
 
 # Piper da Vinci Simulation
-Simulation of an [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) arm holding a da Vinci Si instrument through an [open-platform adaptor](https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments). The arm is shown in [RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html) ([ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)), and the instrument works in the [LapGym](https://github.com/ScheiklP/sofa_env) surgical scenes in the [SOFA](https://www.sofa-framework.org/) simulator.
+Simulation of an [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) arm holding a da Vinci Si instrument through an adaptor. The arm is shown in [RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html) ([ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)), and the instrument works in the [LapGym](https://github.com/ScheiklP/sofa_env) surgical scenes in the [SOFA](https://www.sofa-framework.org/) simulator.
 
 [![Demo](media/demo.gif)](media/demo.mp4)
 
@@ -14,12 +14,36 @@ Simulation of an [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tr
 ## Setting up Docker
 Docker packs everything the simulation needs (ROS 2 Jazzy, SOFA, LapGym, the Piper driver) into one container, so none of it has to be installed on your computer. You can think of a container as a lightweight virtual machine. An image is a template you build once; a container is a copy of the image that you start and work in.
 
-You need Linux with a desktop and about 12 GB of disk space.
+You need Linux with a desktop (or Windows, see [Windows (WSL2)](#windows-wsl2)) and about 12 GB of disk space.
 
 1. Install the Docker engine following the [official instructions](https://docs.docker.com/engine/install/ubuntu/).
 2. Follow the [post-installation steps](https://docs.docker.com/engine/install/linux-postinstall/#manage-docker-as-a-non-root-user) to use Docker as a normal user. Without them every `docker` command has to be run with `sudo`.
 
 More on Docker: [official documentation](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
+
+### Windows (WSL2)
+> [!WARNING]
+> Not tested. The real arm needs Linux, because WSL2 has no CAN drivers.
+
+On Windows everything runs in Ubuntu inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/about) (Windows Subsystem for Linux). You need Windows 11 or Windows 10 version 21H2 or newer, because only these can show the windows of Linux programs ([WSLg](https://github.com/microsoft/wslg)).
+
+1. Open PowerShell as administrator, install WSL2 with Ubuntu 24.04 and restart the computer ([instructions](https://learn.microsoft.com/en-us/windows/wsl/install)):
+   ```powershell
+   wsl --install -d Ubuntu-24.04
+   ```
+2. After the restart, open **Ubuntu 24.04** from the Start menu and enter a Linux username and password. Type all the following commands in that Ubuntu terminal.
+3. In PowerShell, check that Ubuntu runs under WSL version 2 (the `VERSION` column) and update WSL:
+   ```powershell
+   wsl -l -v
+   wsl --update
+   ```
+4. In the Ubuntu terminal, install Docker Engine and do the post-installation steps, the same as on Linux (steps 1 and 2 above). Then install `xhost`, which `run_piper.sh` uses:
+   ```bash
+   sudo apt install -y x11-xserver-utils
+   ```
+5. Continue with [Installing the simulation](#installing-the-simulation) in the Ubuntu terminal. Clone the repository inside Ubuntu (e.g. `cd ~`), not in a Windows folder under `/mnt/c`, because Git there may change the line endings of the scripts and they would no longer run.
+
+WSL2 usually has no `/dev/dri`, so RViz and SOFA render in software; this is slower but enough. If the windows do not arrange themselves, move them with the mouse.
 
 ## Installing the simulation
 ```bash
@@ -58,16 +82,16 @@ The robot model is [docker/davinci/piper_davinci.urdf.xacro](docker/davinci/pipe
 
 ```
 link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
-         (flange)       (adaptor STL)    └─ instrument_shaft ── instrument_wrist
+         (flange)       (your adaptor)   └─ instrument_shaft ── instrument_wrist
 ```
 
-- **The adaptor** is the CAD model from the [adaptor repository](https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments). Docker downloads it during the build to `/root/davinci_piper/meshes/davinci_si_adapter.stl`. The STL is in millimetres, hence `scale="0.001 0.001 0.001"`. The `adapter_mount` joint lifts it by the flange thickness (10.5 mm) and rotates it 90° about x, so the mounting plate lies on the flange.
-- **The instrument** is not in the CAD model, so its housing (a box) and shaft (a cylinder) are estimates. The dimensions are xacro properties at the top of the file (`housing_size`, `shaft_length`, ...).
+- **The adaptor** is not included: you add your adaptor's model yourself (see below). Until you do, RViz shows the instrument without an adaptor. The `davinci_adapter` frame and the instrument offsets are set for the [open-platform adaptor for da Vinci Si instruments](https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments): the `adapter_mount` joint lifts the adaptor frame by the flange thickness (10.5 mm) and rotates it 90° about x.
+- **The instrument** is an estimated box (housing) and cylinder (shaft). The dimensions are xacro properties at the top of the file (`housing_size`, `shaft_length`, ...).
 - **`instrument_wrist`** is the frame at the end of the shaft. Its z axis points along the shaft and its x axis is the jaw hinge axis. This frame is the only link between the arm and SOFA: `piper_tool_bridge.py` sends its pose to SOFA, and the ARM keys move it.
 
-### Your own adaptor
-1. Put your adaptor's STL in `docker/davinci/meshes/`, e.g. `docker/davinci/meshes/my_adapter.stl`. The Dockerfile copies the `davinci` folder to `/root/davinci_piper/`.
-2. In `piper_davinci.urdf.xacro`, change the mesh in the `davinci_adapter` link to `${mesh_dir}/my_adapter.stl`. If the STL is in metres, use `scale="1 1 1"`.
+### Adding your adaptor
+1. Put your adaptor's STL in [docker/davinci/meshes/](docker/davinci/meshes), e.g. `docker/davinci/meshes/my_adapter.stl`. The Dockerfile copies that folder to `/root/davinci_piper/meshes/`.
+2. In `piper_davinci.urdf.xacro`, in the `davinci_adapter` link, remove the comment markers around the `<visual>` block and put in your file name. If the STL is in metres rather than millimetres, use `scale="1 1 1"`.
 3. Change the `origin` of the `adapter_mount` joint so the adaptor plate lies on the flange: `xyz` is the offset and `rpy` the rotation (radians) of your CAD frame relative to the flange.
 4. Change the instrument properties, especially `shaft_axis_y`, `shaft_start_z` and `shaft_length`, so that `instrument_wrist` is at the tip of your instrument.
 5. Check the model and look at it in RViz (enable TF in RViz to see the frames):
@@ -76,7 +100,7 @@ link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
    run_davinci_piper --rings --sliders
    ```
 
-While trying things out you can edit the files directly in the container (`/root/davinci_piper/`) or copy them in with `docker cp`. When the model is done, rebuild the image. The ARM keys read the model from `robot_description`, so they work with the new adaptor without changes. If your instrument is much longer or shorter, change the starting pose `READY_POSE` in [piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py), because the arm's reach depends on it.
+While trying things out you can edit the files directly in the container (`/root/davinci_piper/`) or copy them in with `docker cp`. When the model is done, rebuild the image. The ARM keys read the model from `robot_description`, so they work with your adaptor without changes. If your instrument is much longer or shorter, change the starting pose `READY_POSE` in [piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py), because the arm's reach depends on it.
 
 ## Real arm
 > [!CAUTION]
@@ -94,4 +118,4 @@ The adaptor's motors are not connected to ROS; the INSTRUMENT keys work in simul
 The code is in the [docker](docker) folder: the ROS part in [docker/davinci](docker/davinci), the SOFA part in [docker/sofa](docker/sofa). To move the instrument tip from your own program, publish a [geometry_msgs/Twist](https://docs.ros2.org/latest/api/geometry_msgs/msg/Twist.html) on `/piper/cmd_vel`. Run SOFA scripts with `sofa-python`. Changes inside the container are lost when it is removed, so edit the files in the `docker` folder and rebuild the image.
 
 ## License
-[MIT](LICENSE). The adaptor's CAD model (GPL-3.0) and [sofa_env](https://github.com/ScheiklP/sofa_env) (MIT) are downloaded during the image build.
+[MIT](LICENSE). [sofa_env](https://github.com/ScheiklP/sofa_env) (MIT) is downloaded during the image build.
