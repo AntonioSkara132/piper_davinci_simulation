@@ -50,7 +50,8 @@ TOP_H=$((AH * 11 / 20))
 BOTTOM_Y=$((AY + TOP_H))
 BOTTOM_H=$((AH - TOP_H))
 
-sofa=$(wait_for "LapGym ")  # "LapGym grasp-lift-touch" or "LapGym pick-and-place" && place "$sofa" "$AX" "$AY" "$LEFT_W" "$AH"
+# The SOFA window is titled "LapGym grasp-lift-touch" or "LapGym pick-and-place".
+sofa=$(wait_for "LapGym ") && place "$sofa" "$AX" "$AY" "$LEFT_W" "$AH"
 rviz=$(wait_for " - RViz") && place "$rviz" "$RIGHT_X" "$AY" "$RIGHT_W" "$TOP_H"
 keys=$(wait_for "$TERM_TITLE")
 sliders=$(window_id "Joint State Publisher")

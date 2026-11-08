@@ -72,7 +72,7 @@ SOFA, RViz and a terminal with three panes open: SOFA messages, ARM keys and INS
 
 In the SOFA pane, `r` + `Enter` resets the scene and `a` + `Enter` takes the arm's current pose as the new reference. Without `--rings` you get the organ scene.
 
-Everything runs in the [tmux](https://github.com/tmux/tmux/wiki) session `davinci_piper` ([getting started](https://linuxize.com/post/getting-started-with-tmux/), [cheat sheet](https://tmuxcheatsheet.com/)). To stop:
+Everything runs in the [tmux](https://github.com/tmux/tmux/wiki) session `davinci_piper` ([getting started](https://github.com/tmux/tmux/wiki/Getting-Started), [cheat sheet](https://tmuxcheatsheet.com/)). To stop:
 ```bash
 tmux kill-session -t davinci_piper
 ```
