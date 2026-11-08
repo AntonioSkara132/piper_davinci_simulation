@@ -1,7 +1,13 @@
 Kliknite u gornji desni kut za sadržaj ↗️ | [English version](README_en.md)
 
 # Piper da Vinci simulacija
-Simulacija ruke [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) koja drži da Vinci Si instrument preko adaptera. Ruka se prikazuje u [RViz-u](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html) ([ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)), a instrument radi u kirurškim scenama [LapGym](https://github.com/ScheiklP/sofa_env) u simulatoru [SOFA](https://www.sofa-framework.org/).
+## Uvod
+U ovom projektu pomoću simulatora SOFA simuliramo kiruršku scenu iz LapGyma u kojoj ruka [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) preko adaptera drži instrument da Vinci Si. Simulacija je napravljena kao privremena zamjena za stvarnog robota: na njoj možete razvijati i isprobavati upravljanje dok robot nije dostupan. Ruka se upravlja istim ROS 2 topicima koje koristi upravljački program stvarne ruke.
+
+- **[SOFA](https://www.sofa-framework.org/)** je simulator otvorenog koda za medicinske simulacije. Računa deformacije mekih tkiva, sudare i dodir, pa se vidi kako instrument hvata i pomiče predmete.
+- **[LapGym](https://github.com/ScheiklP/sofa_env)** (sofa_env) je skup scena za SOFA-u koje oponašaju laparoskopske zadatke. Ovdje koristimo dvije: premještanje prstenova i hvatanje tkiva na organu.
+- **[ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)** povezuje programe porukama na topicima, a **[RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html)** prikazuje model ruke s adapterom i instrumentom.
+- **[Docker](https://docs.docker.com/get-started/)** pakira sve to u jedan kontejner, pa na svoje računalo instalirate samo Docker (vidi [Postavljanje Dockera](#postavljanje-dockera)).
 
 [![Demo](media/demo.gif)](media/demo.mp4)
 

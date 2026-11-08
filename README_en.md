@@ -1,7 +1,13 @@
 Click in the upper right corner for Table of Contents ↗️ | [Hrvatska verzija](README.md)
 
 # Piper da Vinci Simulation
-Simulation of an [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) arm holding a da Vinci Si instrument through an adaptor. The arm is shown in [RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html) ([ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)), and the instrument works in the [LapGym](https://github.com/ScheiklP/sofa_env) surgical scenes in the [SOFA](https://www.sofa-framework.org/) simulator.
+## Introduction
+In this project we use the SOFA simulator to simulate a surgical scene from LapGym in which an [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) arm holds a da Vinci Si instrument through an adaptor. The simulation is a temporary replacement for the real robot: you can develop and try out control on it while the robot is not available. The arm is controlled through the same ROS 2 topics that the real arm's driver uses.
+
+- **[SOFA](https://www.sofa-framework.org/)** is an open-source simulator for medical simulation. It computes soft-tissue deformation, collisions and contact, so you can see how the instrument grasps and moves objects.
+- **[LapGym](https://github.com/ScheiklP/sofa_env)** (sofa_env) is a set of SOFA scenes that imitate laparoscopic tasks. We use two of them: moving rings and grasping tissue on an organ.
+- **[ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)** connects programs through messages on topics, and **[RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html)** shows the model of the arm with the adaptor and the instrument.
+- **[Docker](https://docs.docker.com/get-started/)** packs all of this into one container, so the only thing you install on your computer is Docker (see [Setting up Docker](#setting-up-docker)).
 
 [![Demo](media/demo.gif)](media/demo.mp4)
 
