@@ -92,6 +92,19 @@ link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
 ### Dodavanje adaptera
 1. Stavite STL svog adaptera u [docker/davinci/meshes/](docker/davinci/meshes), npr. `docker/davinci/meshes/moj_adapter.stl`. Dockerfile kopira tu mapu u `/root/davinci_piper/meshes/`.
 2. U `piper_davinci.urdf.xacro`, u linku `davinci_adapter`, maknite oznake komentara oko bloka `<visual>` i upišite ime svoje datoteke. Ako je STL u metrima, a ne u milimetrima, stavite `scale="1 1 1"`.
+   ```xml
+   <link name="davinci_adapter">
+     <visual>
+       <geometry>
+         <mesh filename="${mesh_dir}/moj_adapter.stl" scale="0.001 0.001 0.001"/>
+       </geometry>
+       <material name="adapter_grey"><color rgba="0.75 0.77 0.82 1"/></material>
+     </visual>
+     <inertial>
+       ...
+     </inertial>
+   </link>
+   ```
 3. Promijenite `origin` zgloba `adapter_mount` tako da ploča adaptera leži na prirubnici: `xyz` je pomak, a `rpy` zakret (u radijanima) okvira vašeg CAD modela u odnosu na prirubnicu.
 4. Promijenite svojstva instrumenta, a posebno `shaft_axis_y`, `shaft_start_z` i `shaft_length`, tako da `instrument_wrist` bude na vrhu vašeg instrumenta.
 5. Provjerite model i pogledajte ga u RViz-u (u RViz-u uključite TF da vidite okvire):

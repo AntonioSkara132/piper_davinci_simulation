@@ -92,6 +92,19 @@ link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
 ### Adding your adaptor
 1. Put your adaptor's STL in [docker/davinci/meshes/](docker/davinci/meshes), e.g. `docker/davinci/meshes/my_adapter.stl`. The Dockerfile copies that folder to `/root/davinci_piper/meshes/`.
 2. In `piper_davinci.urdf.xacro`, in the `davinci_adapter` link, remove the comment markers around the `<visual>` block and put in your file name. If the STL is in metres rather than millimetres, use `scale="1 1 1"`.
+   ```xml
+   <link name="davinci_adapter">
+     <visual>
+       <geometry>
+         <mesh filename="${mesh_dir}/my_adapter.stl" scale="0.001 0.001 0.001"/>
+       </geometry>
+       <material name="adapter_grey"><color rgba="0.75 0.77 0.82 1"/></material>
+     </visual>
+     <inertial>
+       ...
+     </inertial>
+   </link>
+   ```
 3. Change the `origin` of the `adapter_mount` joint so the adaptor plate lies on the flange: `xyz` is the offset and `rpy` the rotation (radians) of your CAD frame relative to the flange.
 4. Change the instrument properties, especially `shaft_axis_y`, `shaft_start_z` and `shaft_length`, so that `instrument_wrist` is at the tip of your instrument.
 5. Check the model and look at it in RViz (enable TF in RViz to see the frames):
