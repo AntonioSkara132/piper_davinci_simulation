@@ -127,8 +127,29 @@ run_davinci_piper --rings --follow
 ```
 The adaptor's motors are not connected to ROS; the INSTRUMENT keys work in simulation only.
 
+## Topics and TF
+```
+ARM keys ──/piper/cmd_vel──> piper_cartesian_jog ──/control/joint_states──> robot_state_publisher ──TF──> piper_tool_bridge ──UDP──> SOFA
+                             (inverse kinematics)                                                 (base_link → instrument_wrist)
+
+INSTRUMENT keys ──/davinci/cmd_vel──> twist_socket_bridge ──UDP──> SOFA (roll, pitch, yaw, grip)
+```
+
+| Topic / frame | Type | What it is |
+|---|---|---|
+| `/piper/cmd_vel` | `geometry_msgs/Twist` | velocity of the instrument tip in the `base_link` frame: `linear` 0.5 = 40 mm/s, `angular.z` 1.0 = 0.25 rad/s of turning about the vertical axis |
+| `/control/joint_states` | `sensor_msgs/JointState` | commanded positions of `joint1` … `joint6` in radians; the driver moves the real arm to them |
+| `/feedback/joint_states` | `sensor_msgs/JointState` | measured joint positions of the real arm, published by the driver |
+| `/davinci/cmd_vel` | `geometry_msgs/Twist` | INSTRUMENT keys (roll, pitch, yaw, grip); they go to SOFA only |
+| TF `base_link` → `instrument_wrist` | TF | pose of the instrument wrist that SOFA follows |
+
+RViz and SOFA show `/control/joint_states`, or `/feedback/joint_states` with `--follow`. To move the arm from your own program, either:
+
+- publish a `Twist` on `/piper/cmd_vel`, the same as the ARM keys, or
+- start `run_davinci_piper --rings --no-arm`, so the ARM keys are off, and publish `JointState` on `/control/joint_states` yourself, with the current time in `header.stamp`.
+
 ## Working on your project
-The code is in the [docker](docker) folder: the ROS part in [docker/davinci](docker/davinci), the SOFA part in [docker/sofa](docker/sofa). To move the instrument tip from your own program, publish a [geometry_msgs/Twist](https://docs.ros2.org/latest/api/geometry_msgs/msg/Twist.html) on `/piper/cmd_vel`. Run SOFA scripts with `sofa-python`. Changes inside the container are lost when it is removed, so edit the files in the `docker` folder and rebuild the image.
+The code is in the [docker](docker) folder: the ROS part in [docker/davinci](docker/davinci), the SOFA part in [docker/sofa](docker/sofa). The topics that move the arm are in [Topics and TF](#topics-and-tf). Run SOFA scripts with `sofa-python`. Changes inside the container are lost when it is removed, so edit the files in the `docker` folder and rebuild the image.
 
 ## License
 [MIT](LICENSE). [sofa_env](https://github.com/ScheiklP/sofa_env) (MIT) is downloaded during the image build.

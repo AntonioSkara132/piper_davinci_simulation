@@ -18,6 +18,7 @@
 # Options:
 #     --rings       ring scene (pick-and-place) instead of the organ scene
 #     --sliders     move the arm with joint sliders instead of the ARM keys
+#     --no-arm      start nothing that moves the arm; your program publishes control/joint_states
 #     --follow      real arm: show its feedback, and the ARM keys / sliders move it
 #                   (start the agx_arm driver first)
 #     --no-tile     do not open the terminal or move windows; attach yourself
@@ -40,6 +41,7 @@ for arg in "$@"; do
     case "$arg" in
         --follow) FOLLOW=true ;;
         --sliders) ARM=sliders ;;
+        --no-arm) ARM=none ;;
         --no-tile) TILE=false ;;
         --rings) SIM_ARGS+=(--scene rings) ;;
         *) SIM_ARGS+=("$arg") ;;

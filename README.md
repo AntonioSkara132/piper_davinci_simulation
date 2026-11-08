@@ -127,8 +127,29 @@ run_davinci_piper --rings --follow
 ```
 Motori adaptera nisu spojeni na ROS; tipke instrumenta rade samo u simulaciji.
 
+## Topici i TF
+```
+ARM keys ──/piper/cmd_vel──> piper_cartesian_jog ──/control/joint_states──> robot_state_publisher ──TF──> piper_tool_bridge ──UDP──> SOFA
+                             (inverzna kinematika)                                                (base_link → instrument_wrist)
+
+INSTRUMENT keys ──/davinci/cmd_vel──> twist_socket_bridge ──UDP──> SOFA (roll, pitch, yaw, hvat)
+```
+
+| Topic / okvir | Tip | Što je |
+|---|---|---|
+| `/piper/cmd_vel` | `geometry_msgs/Twist` | brzina vrha instrumenta u okviru `base_link`: `linear` 0.5 = 40 mm/s, `angular.z` 1.0 = 0.25 rad/s okretanja oko okomite osi |
+| `/control/joint_states` | `sensor_msgs/JointState` | zadani položaji zglobova `joint1` … `joint6` u radijanima; stvarnu ruku upravljački program pomiče u njih |
+| `/feedback/joint_states` | `sensor_msgs/JointState` | izmjereni položaji zglobova stvarne ruke, objavljuje ih upravljački program |
+| `/davinci/cmd_vel` | `geometry_msgs/Twist` | tipke instrumenta (roll, pitch, yaw, hvat); idu samo u SOFA-u |
+| TF `base_link` → `instrument_wrist` | TF | poza zgloba instrumenta koju SOFA prati |
+
+RViz i SOFA prikazuju `/control/joint_states`, a s opcijom `--follow` `/feedback/joint_states`. Iz vlastitog programa rukom upravljate na jedan od dva načina:
+
+- objavljujete `Twist` na `/piper/cmd_vel`, isto kao tipke ruke, ili
+- pokrenete `run_davinci_piper --rings --no-arm`, tako da tipke ruke ne rade, i sami objavljujete `JointState` na `/control/joint_states`, s trenutnim vremenom u `header.stamp`.
+
 ## Rad na projektu
-Kod je u mapi [docker](docker): ROS dio u [docker/davinci](docker/davinci), SOFA dio u [docker/sofa](docker/sofa). Vrh instrumenta možete pomicati iz vlastitog programa objavljivanjem [geometry_msgs/Twist](https://docs.ros2.org/latest/api/geometry_msgs/msg/Twist.html) na `/piper/cmd_vel`. SOFA skripte pokreću se sa `sofa-python`. Promjene unutar kontejnera brišu se s kontejnerom, pa mijenjajte datoteke u mapi `docker` i ponovno izgradite sliku.
+Kod je u mapi [docker](docker): ROS dio u [docker/davinci](docker/davinci), SOFA dio u [docker/sofa](docker/sofa). Topici kojima upravljate rukom opisani su u [Topici i TF](#topici-i-tf). SOFA skripte pokreću se sa `sofa-python`. Promjene unutar kontejnera brišu se s kontejnerom, pa mijenjajte datoteke u mapi `docker` i ponovno izgradite sliku.
 
 ## Licenca
 [MIT](LICENSE). [sofa_env](https://github.com/ScheiklP/sofa_env) (MIT) preuzima se tijekom izgradnje slike.
