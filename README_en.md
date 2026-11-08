@@ -22,9 +22,6 @@ You need Linux with a desktop (or Windows, see [Windows (WSL2)](#windows-wsl2)) 
 More on Docker: [official documentation](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
 
 ### Windows (WSL2)
-> [!WARNING]
-> Not tested. The real arm needs Linux, because WSL2 has no CAN drivers.
-
 On Windows everything runs in Ubuntu inside [WSL2](https://learn.microsoft.com/en-us/windows/wsl/about) (Windows Subsystem for Linux). You need Windows 11 or Windows 10 version 21H2 or newer, because only these can show the windows of Linux programs ([WSLg](https://github.com/microsoft/wslg)).
 
 1. Open PowerShell as administrator, install WSL2 with Ubuntu 24.04 and restart the computer ([instructions](https://learn.microsoft.com/en-us/windows/wsl/install)):
@@ -114,18 +111,6 @@ link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
    ```
 
 While trying things out you can edit the files directly in the container (`/root/davinci_piper/`) or copy them in with `docker cp`. When the model is done, rebuild the image. The ARM keys read the model from `robot_description`, so they work with your adaptor without changes. If your instrument is much longer or shorter, change the starting pose `READY_POSE` in [piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py), because the arm's reach depends on it.
-
-## Real arm
-> [!CAUTION]
-> Not tested. Follow the [AgileX instructions](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) and keep the emergency stop at hand.
-
-```bash
-bash ~/agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh
-ros2 launch agx_arm_ctrl start_single_agx_arm.launch.py can_port:=can0 arm_type:=piper effector_type:=agx_gripper
-# in a second terminal (./run_piper.sh):
-run_davinci_piper --rings --follow
-```
-The adaptor's motors are not connected to ROS; the INSTRUMENT keys work in simulation only.
 
 ## Topics and TF
 ```

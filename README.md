@@ -22,9 +22,6 @@ Potrebni su Linux s grafičkim sučeljem (ili Windows, vidi [Windows (WSL2)](#wi
 Više o Dockeru: [službena dokumentacija](https://docs.docker.com/get-started/), [LARICS Docker wiki](https://github.com/larics/docker_files/wiki).
 
 ### Windows (WSL2)
-> [!WARNING]
-> Nije testirano. Za stvarnu ruku treba Linux, jer WSL2 nema upravljačke programe za CAN.
-
 Na Windowsima se sve radi u Ubuntuu unutar [WSL2](https://learn.microsoft.com/en-us/windows/wsl/about) (Windows Subsystem for Linux). Potreban je Windows 11 ili Windows 10 verzija 21H2 ili novija, jer tek one mogu prikazivati prozore Linux programa ([WSLg](https://github.com/microsoft/wslg)).
 
 1. Otvorite PowerShell kao administrator, instalirajte WSL2 s Ubuntuom 24.04 i ponovno pokrenite računalo ([upute](https://learn.microsoft.com/en-us/windows/wsl/install)):
@@ -114,18 +111,6 @@ link6 ── flange_link ── davinci_adapter ─┬─ instrument_housing
    ```
 
 Dok isprobavate, datoteke možete mijenjati izravno u kontejneru (`/root/davinci_piper/`) ili ih kopirati s `docker cp`. Kad je model gotov, ponovno izgradite sliku. Upravljanje tipkama čita model iz `robot_description`, pa radi s novim adapterom bez promjena. Ako je vaš instrument znatno duži ili kraći, promijenite početnu pozu `READY_POSE` u [piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py), jer o njoj ovisi koliko ruka može doseći.
-
-## Stvarna ruka
-> [!CAUTION]
-> Nije testirano. Slijedite [AgileX upute](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) i držite tipku za zaustavljanje u nuždi pri ruci.
-
-```bash
-bash ~/agx_arm_ws/src/agx_arm_ros/scripts/can_activate.sh
-ros2 launch agx_arm_ctrl start_single_agx_arm.launch.py can_port:=can0 arm_type:=piper effector_type:=agx_gripper
-# u drugom terminalu (./run_piper.sh):
-run_davinci_piper --rings --follow
-```
-Motori adaptera nisu spojeni na ROS; tipke instrumenta rade samo u simulaciji.
 
 ## Topici i TF
 ```
