@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Keyboard Cartesian control of the Piper: move the da Vinci instrument tip with teleop_twist_keyboard.
 
-This node is only an example of how to control the arm. Write your own control and start it with
-run_davinci_piper --no-arm; this file can be a starting point.
+Test tool, not part of the image: it is used to check the simulation (test/run_tests.sh) and can
+serve as a starting point for your own control. To try it, copy it into the container and start
+the simulation with --jog:
+    docker cp test/piper_cartesian_jog.py piper-jazzy:/root/davinci_piper/
+    docker exec piper-jazzy /root/davinci_piper/run_davinci_piper.sh --jog
 
 Subscribes to a Twist (from teleop_twist_keyboard), moves a target pose of the instrument wrist
 (frame instrument_wrist) in the Piper base frame, solves the inverse kinematics for joint1..joint6,

@@ -8,10 +8,11 @@
 #   |             | [sliders] keys |
 #   +-------------+----------------+
 #
-# Called by run_davinci_piper.sh; run it again to put the windows back if they were moved.
+# Called by run_davinci_piper.sh with the arm mode (sliders, keys or none) as the argument; run it again to put the windows back if they were moved.
 # Needs wmctrl and xterm (apt install wmctrl xterm). Works on X11 windows, which all of these are
 # (they come from this container through XWayland on a Wayland desktop).
 set -u
+ARM=${1:-sliders}
 SESSION=davinci_piper
 TERM_TITLE="Da Vinci Piper keys"
 
@@ -54,7 +55,8 @@ BOTTOM_H=$((AH - TOP_H))
 sofa=$(wait_for "LapGym ") && place "$sofa" "$AX" "$AY" "$LEFT_W" "$AH"
 rviz=$(wait_for " - RViz") && place "$rviz" "$RIGHT_X" "$AY" "$RIGHT_W" "$TOP_H"
 keys=$(wait_for "$TERM_TITLE")
-sliders=$(window_id "Joint State Publisher")
+sliders=""
+[ "$ARM" = sliders ] && sliders=$(wait_for "Joint State Publisher")
 if [ -n "$sliders" ]; then
     SLIDERS_W=280
     place "$sliders" "$RIGHT_X" "$BOTTOM_Y" "$SLIDERS_W" "$BOTTOM_H"
