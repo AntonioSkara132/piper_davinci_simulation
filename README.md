@@ -89,6 +89,8 @@ run_davinci_piper --rings
 ```
 Pokreće model ruke sa sliderima i scenu s prstenovima; bez `--rings` pokreće se scena s organom. Instrument u SOFA-i prati TF: `piper_tool_bridge` čita okvire instrumenta i šalje ih SOFA-i, pa se instrument pomiče sa sliderima ruke, a zglob i čeljusti sa sliderima adaptera. Baza ruke stoji na stalnom mjestu u sceni: u početnoj pozi slidera instrument je ondje gdje ga scena inače postavlja.
 
+![Prsten uhvaćen i podignut sliderima](media/sofa_sliders.png)
+
 Opcije:
 - `--no-arm`: bez slidera; položaje zglobova objavljuje vaš program,
 - `--follow`: stvarna ruka (prvo pokrenite driver). Prikazuju se njezini izmjereni položaji, a slideri je pomiču,
