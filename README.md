@@ -9,6 +9,8 @@ U ovom projektu pomoću simulatora SOFA simuliramo kiruršku scenu iz LapGyma u 
 - **[ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)** povezuje programe porukama na topicima, a **[RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html)** prikazuje model ruke s adapterom i instrumentom.
 - **[Docker](https://docs.docker.com/get-started/)** pakira sve to u jedan kontejner, pa na svoje računalo instalirate samo Docker (vidi [Postavljanje Dockera](#postavljanje-dockera)).
 
+Kao primjer upravljanja napravljeno je sučelje s tipkovnicom ([teleop_twist_keyboard](https://github.com/ros2/teleop_twist_keyboard)) koje šalje poruke `Twist`. **To je samo primjer:** vaš program rukom upravlja istim topicima, opisanima u [Topici i TF](#topici-i-tf).
+
 [![Demo](media/demo.gif)](media/demo.mp4)
 
 > [!NOTE]
