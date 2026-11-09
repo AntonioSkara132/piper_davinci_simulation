@@ -83,6 +83,8 @@ class WindowedEnvMixin:
     ZOOM_FACTOR_PER_WHEEL_STEP = 0.9
 
     def _update_rgb_buffer(self) -> np.ndarray:
+        if self.render_framework != RenderFramework.PYGAME:  # --headless: no window, LapGym's own rendering
+            return super()._update_rgb_buffer()
         # The base class copies into a buffer of the starting size, which fails after a resize.
         self._update_sofa_visuals()
         self._rgb_buffer = self._get_rgb()
@@ -107,6 +109,9 @@ class WindowedEnvMixin:
 
     def _update_sofa_visuals(self) -> None:
         """Same as SofaEnv._update_sofa_visuals, but with the orbit camera instead of the scene camera."""
+        if self.render_framework != RenderFramework.PYGAME:
+            super()._update_sofa_visuals()
+            return
         gl, glu = self.opengl_gl, self.opengl_glu
         if self.orbit is None:
             self._init_orbit_from_scene_camera()

@@ -122,19 +122,6 @@ Treba ih spojiti tako da instrument u SOFA-i prati okvir `instrument_wrist`, a s
 
 Kad je to napravljeno, vlastito upravljanje radi jednako u simulaciji i na stvarnoj ruci, jer obje čitaju `/control/joint_states`.
 
-### Prijedlozi za upravljanje
-Nekoliko načina na koje se može napraviti upravljanje, od jednostavnijih prema složenijima. Svi na kraju objavljuju položaje zglobova na `/control/joint_states`.
-
-- **Vlastiti čvor s položajima zglobova.** Najjednostavnije: čvor računa `joint1` … `joint6` (npr. putanju između nekoliko poza) i objavljuje ih.
-- **Kartezijsko upravljanje vlastitom inverznom kinematikom.** Ulaz je željena brzina ili poza vrha instrumenta. Testni teleop [test/piper_cartesian_jog.py](test/piper_cartesian_jog.py) je jedno takvo rješenje (numerička IK, prigušeni najmanji kvadrati s geometrijskim Jacobianom iz URDF-a). Piper ima sferni zglob šake (osi `joint4`, `joint5` i `joint6` sijeku se u jednoj točki), pa se može napraviti i analitička IK (Pieperova metoda, [Inverse kinematics](https://en.wikipedia.org/wiki/Inverse_kinematics)).
-- **Udaljeno središte gibanja (RCM).** Kod laparoskopije osovina mora stalno prolaziti kroz točku ulaza u tijelo (troakar). To je dodatni uvjet u inverznoj kinematici, npr. kao dodatni redovi Jacobiana ili zadatak nižeg prioriteta. Ovo je glavni zadatak koji gotovi alati ne rješavaju sami.
-- **[MoveIt 2](https://moveit.picknik.ai/main/index.html) i [MoveIt Servo](https://moveit.picknik.ai/main/doc/examples/realtime_servo/realtime_servo_tutorial.html).** Servo iz `Twist` poruka u stvarnom vremenu računa pomake zglobova i pazi na granice i singularitete; MoveIt planira i putanje bez sudara. Treba napraviti MoveIt konfiguraciju za `piper_davinci.urdf.xacro` ([MoveIt Setup Assistant](https://moveit.picknik.ai/main/doc/examples/setup_assistant/setup_assistant_tutorial.html)) i izlaz Serva pretvoriti u `/control/joint_states`. Paket `ros-jazzy-moveit-servo` postoji u apt-u, ali još nije u slici.
-- **[ros2_control](https://control.ros.org/jazzy/index.html) i [cartesian_controllers](https://github.com/fzi-forschungszentrum-informatik/cartesian_controllers).** Standardniji, ali složeniji put: treba napisati hardversko sučelje ros2_control za Piper (u projektu ga nema), a cartesian_controllers se gradi iz izvornog koda. Upravljanje silom iz tog paketa traži senzor sile i momenta, koji Piper nema.
-- **Drugi ulazni uređaji.** Umjesto tipkovnice `Twist` može slati igraća palica ([teleop_twist_joy](https://github.com/ros2/teleop_twist_joy)), 3D miš ili haptički uređaj; ostatak lanca ostaje isti.
-
-## Testni alati
-Mapa [test](test) nije u slici. Sadrži alate kojima smo provjerili da se scene mogu voditi rukom: `run_davinci_piper` pokreće ruku, SOFA-u i vezu između njih, a `piper_cartesian_jog.py` pomiče vrh instrumenta tipkovnicom. Upute za instalaciju u kontejner i za pokretanje testova su u [test/README.md](test/README.md).
-
 ## Rad na projektu
 Kod je u mapi [docker](docker). Driver za Piper nije u njoj: Dockerfile ga pri izgradnji slike klonira iz [AgileX repozitorija](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) u `/root/agx_arm_ws`. U driver nismo ništa dodavali niti smo ga mijenjali.
 
