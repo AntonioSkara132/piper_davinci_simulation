@@ -1,11 +1,12 @@
-"""Drive the LapGym grasp-lift-touch gripper from the sofa_control twist_socket_bridge.
+"""Drive a LapGym gripper from the keyboard through twist_socket_bridge:
+    grasp-lift-touch (organ, the default) or pick-and-place (rings, with --rings).
 
 Data path:
     teleop_twist_keyboard  --Twist on /robot/cmd_vel-->  twist_socket_bridge
     --UDP 127.0.0.1:5005, {"vel": [vx, vy, vz, wx, wy, wz]}-->  this script (SOFA, Python 3.12)
 
-SOFA runs in the ~/sofa_env venv (Python 3.12) and ROS Humble in Python 3.10, which is why
-the command goes over UDP instead of rclpy.
+SOFA runs in its own venv (/opt/sofa_venv) and ROS 2 in the system Python, which is why the
+command goes over UDP instead of rclpy.
 
 Key mapping with teleop_twist_keyboard's default layout:
     i / ,        linear.x   -> tilt the gripper forward / back
@@ -30,7 +31,7 @@ The cautery hook is left still.
 Usage:
     run_sofa_teleop   (in the piper-jazzy container: starts this script and the ROS nodes)
 or alone:
-    sofa-python lapgym_keyboard_teleop.py [--port 5005] [--no-realtime]
+    sofa-python lapgym_keyboard_teleop.py [--rings] [--port 5005] [--no-realtime]
 """
 
 import argparse
@@ -45,13 +46,16 @@ import numpy as np
 
 from sofa_env.base import RenderFramework, RenderMode
 from sofa_env.scenes.grasp_lift_touch.grasp_lift_touch_env import ActionType, GraspLiftTouchEnv, ObservationType
+from sofa_env.scenes.pick_and_place.pick_and_place_env import ActionType as PickAndPlaceActionType
+from sofa_env.scenes.pick_and_place.pick_and_place_env import ObservationType as PickAndPlaceObservationType
+from sofa_env.scenes.pick_and_place.pick_and_place_env import PickAndPlaceEnv
 
 # teleop_twist_keyboard's default speeds. At these speeds a key gives full instrument velocity.
 TELEOP_LINEAR_SPEED = 0.5
 TELEOP_ANGULAR_SPEED = 1.0
 
 # Index of each gripper degree of freedom in the env's continuous action:
-# [pan, tilt, spin, depth, jaw angle] for the gripper, then 5 values for the cautery hook.
+# [pan, tilt, spin, depth, jaw angle] for the gripper; grasp-lift-touch adds 5 values for the cautery hook.
 PAN, TILT, SPIN, DEPTH, JAW = range(5)
 
 
@@ -194,6 +198,13 @@ class WindowedGraspLiftTouchEnv(WindowedEnvMixin, GraspLiftTouchEnv):
     ORBIT_DEFAULT_DISTANCE = 290.0  # mm; the liver is about this far in front of the scene camera
 
 
+class WindowedPickAndPlaceEnv(WindowedEnvMixin, PickAndPlaceEnv):
+    """PickAndPlaceEnv in a resizable window with a mouse-controlled camera."""
+
+    window_caption = "LapGym pick-and-place"
+    ORBIT_DEFAULT_DISTANCE = 220.0  # the scene camera is about 220 mm from the board centre
+
+
 # The scene starts the gripper at about 130 mm depth, where it sits at or past the top edge of
 # the camera image. At 190 mm its jaws are in view above the liver.
 START_DEPTH = 190.0
@@ -202,9 +213,11 @@ START_DEPTH = 190.0
 REDRAW_PERIOD = 1.0 / 60.0
 
 
-def reset_env(env: "WindowedGraspLiftTouchEnv") -> None:
-    """Reset the scene and push the gripper in far enough to be visible."""
+def reset_env(env) -> None:
+    """Reset the scene and, in grasp-lift-touch, push the gripper in far enough to be visible."""
     env.reset()
+    if not isinstance(env, GraspLiftTouchEnv):
+        return
     state = env.gripper.articulated_state.copy()
     state[DEPTH] = max(state[DEPTH], START_DEPTH)
     env.gripper.set_articulated_state(state)
@@ -217,9 +230,9 @@ def read_console_key() -> str:
     return ""
 
 
-def twist_to_action(vel: np.ndarray) -> np.ndarray:
-    """Map [vx, vy, vz, wx, wy, wz] from the bridge to the env's 10-value action in [-1, 1]."""
-    action = np.zeros(10, dtype=np.float32)
+def twist_to_action(vel: np.ndarray, size: int) -> np.ndarray:
+    """Map [vx, vy, vz, wx, wy, wz] from the bridge to the env's action in [-1, 1] (size values)."""
+    action = np.zeros(size, dtype=np.float32)
     action[TILT] = vel[0] / TELEOP_LINEAR_SPEED
     action[JAW] = -vel[1] / TELEOP_LINEAR_SPEED  # J (+y) closes, L (-y) opens
     action[DEPTH] = vel[2] / TELEOP_LINEAR_SPEED
@@ -229,6 +242,7 @@ def twist_to_action(vel: np.ndarray) -> np.ndarray:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--rings", action="store_true", help="pick-and-place (rings) instead of grasp-lift-touch (organ)")
     parser.add_argument("--port", type=int, default=5005, help="UDP port twist_socket_bridge sends to")
     parser.add_argument("--no-realtime", action="store_true", help="step as fast as possible instead of at wall-clock speed")
     parser.add_argument("--headless", action="store_true", help="render off-screen without a window (for testing)")
@@ -245,18 +259,29 @@ def main() -> None:
     sock.bind(("127.0.0.1", args.port))
     sock.setblocking(False)
 
-    WindowedGraspLiftTouchEnv.window_position = (args.x, args.y)
-    env = WindowedGraspLiftTouchEnv(
+    common = dict(
         render_mode=RenderMode.HEADLESS if args.headless else RenderMode.HUMAN,
         render_framework=RenderFramework.PYGLET if args.headless else RenderFramework.PYGAME,
-        observation_type=ObservationType.STATE,
-        action_type=ActionType.CONTINUOUS,
         image_shape=(args.width, args.height),  # the scene reads this as (width, height)
         time_step=args.dt,
         frame_skip=1,
-        # Default speeds are [pan 15 deg/s, tilt 15 deg/s, spin 25 deg/s, depth 25 mm/s, jaw 20 deg/s].
+        # grasp-lift-touch's default speeds: [pan 15 deg/s, tilt 15 deg/s, spin 25 deg/s, depth 25 mm/s, jaw 20 deg/s].
         maximum_state_velocity=args.speed * np.array([15.0, 15.0, 25.0, 25.0, 20.0]),
     )
+    if args.rings:
+        WindowedPickAndPlaceEnv.window_position = (args.x, args.y)
+        env = WindowedPickAndPlaceEnv(
+            observation_type=PickAndPlaceObservationType.STATE,
+            action_type=PickAndPlaceActionType.CONTINUOUS,
+            num_active_pegs=3,
+            randomize_color=True,
+            start_grasped=False,
+            **common,
+        )
+    else:
+        WindowedGraspLiftTouchEnv.window_position = (args.x, args.y)
+        env = WindowedGraspLiftTouchEnv(observation_type=ObservationType.STATE, action_type=ActionType.CONTINUOUS, **common)
+    action_size = env.action_space.shape[0]
     reset_env(env)
     sim_dt = env.time_step * env.frame_skip
     print(f"Listening for twist commands on UDP 127.0.0.1:{args.port}. Simulation step {sim_dt:.3f} s.", flush=True)
@@ -286,7 +311,7 @@ def main() -> None:
                 reset_env(env)
                 vel[:] = 0.0
 
-            _, _, terminated, truncated, info = env.step(twist_to_action(vel))
+            _, _, terminated, truncated, info = env.step(twist_to_action(vel, action_size))
             if terminated or truncated:
                 print("Episode finished, resetting.", flush=True)
                 reset_env(env)
@@ -296,7 +321,8 @@ def main() -> None:
             now = time.monotonic()
             if now - last_print >= 5.0:
                 rate = steps_since_print * sim_dt / (now - last_print)
-                print(f"real-time factor {rate:.2f}  phase {env.active_phase.name}  gripper [pan tilt spin depth jaw] {np.round(env.gripper.articulated_state, 1).tolist()}  command {np.round(vel, 2).tolist()}", flush=True)
+                phase = getattr(env, "active_phase", None)
+                print(f"real-time factor {rate:.2f}  phase {phase.name if phase is not None else '-'}  gripper [pan tilt spin depth jaw] {np.round(env.gripper.articulated_state, 1).tolist()}  command {np.round(vel, 2).tolist()}", flush=True)
                 last_print, steps_since_print = now, 0
 
             # Wait until wall-clock time catches up with simulated time.

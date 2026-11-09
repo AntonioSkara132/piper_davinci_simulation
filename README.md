@@ -74,9 +74,9 @@ Otvaraju se RViz s modelom ruke, adaptera i instrumenta i prozor sa sliderima zg
 
 ### SOFA bez ruke
 ```bash
-run_sofa_teleop
+run_sofa_teleop --rings
 ```
-Pokreće scenu s organom (grasp-lift-touch) bez Pipera: tipkovnica ([teleop_twist_keyboard](https://github.com/ros2/teleop_twist_keyboard) na `/robot/cmd_vel`) preko `twist_socket_bridge` šalje naredbe izravno LapGym hvataljci u SOFA-i. Kliknite na donje okno terminala prije tipkanja:
+Pokreće scenu s prstenovima (pick-and-place) bez Pipera; bez `--rings` pokreće se scena s organom (grasp-lift-touch). Tipkovnica ([teleop_twist_keyboard](https://github.com/ros2/teleop_twist_keyboard) na `/robot/cmd_vel`) preko `twist_socket_bridge` šalje naredbe izravno LapGym hvataljci u SOFA-i. Kliknite na donje okno terminala prije tipkanja:
 
 | Tipka | Hvataljka |
 |---|---|

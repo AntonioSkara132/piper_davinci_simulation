@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Keyboard control of the LapGym grasp-lift-touch gripper in SOFA, through ROS 2.
+# Keyboard control of a LapGym gripper in SOFA through ROS 2: grasp-lift-touch (organ, the
+# default) or pick-and-place (rings, with --rings).
 # Runs inside the piper-jazzy container (installed there as run_sofa_teleop).
 #
 # Starts a tmux session "sofa_teleop" with three panes:
@@ -7,7 +8,7 @@
 #   2. twist_socket_bridge: forwards /robot/cmd_vel as JSON over UDP to port 5005
 #   3. teleop_twist_keyboard publishing to /robot/cmd_vel  <- type keys here
 #
-# Extra arguments go to the SOFA script, e.g.  run_sofa_teleop --speed 3 --width 1200
+# Extra arguments go to the SOFA script, e.g.  run_sofa_teleop --rings --speed 3 --width 1200
 # (run  sofa-python /opt/sofa_teleop/lapgym_keyboard_teleop.py --help  for the full list).
 # Stop everything with:  tmux kill-session -t sofa_teleop   (or Ctrl-b then : kill-session)
 set -e

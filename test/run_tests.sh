@@ -138,6 +138,12 @@ check "G1 window opens" "wmctrl -l | grep -q 'LapGym grasp-lift-touch'"
 tmux capture-pane -p -J -t sofa_teleop:teleop.0 | grep -v '^ *$' | tail -3
 check "G2 no Python error" "! tmux capture-pane -p -J -t sofa_teleop:teleop.0 -S -200 | grep -q Traceback"
 shot G_sofa_teleop
+tmux kill-session -t sofa_teleop; pkill xterm; sleep 2
+bash -ic "run_sofa_teleop --rings" > /tmp/sofa_teleop.log 2>&1
+for _ in $(seq 60); do sleep 1; wmctrl -l | grep -q "LapGym pick-and-place" && break; done
+sleep 5
+check "G3 --rings opens the ring scene" "wmctrl -l | grep -q 'LapGym pick-and-place'"
+check "G4 no Python error with --rings" "! tmux capture-pane -p -J -t sofa_teleop:teleop.0 -S -200 | grep -q Traceback"
 tmux kill-session -t sofa_teleop; sleep 2
 
 echo "=== H: the model in RViz with joint sliders (what is in the image, without the test tools)"
