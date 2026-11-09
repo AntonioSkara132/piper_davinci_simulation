@@ -10,7 +10,7 @@ U ovom projektu ruka [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ro
 - **[Docker](https://docs.docker.com/get-started/)** pakira sve to u jedan kontejner, pa na svoje računalo instalirate samo Docker (vidi [Postavljanje Dockera](#postavljanje-dockera)).
 
 Slika sadrži odvojene dijelove:
-- upravljački program (driver) za Pipera, kojim se stvarna ruka upravlja sliderima bez ikakvog dodatnog koda ([Stvarna ruka s driverom](#stvarna-ruka-s-driverom)),
+- upravljački program (driver) za Pipera,
 - model ruke s adapterom i instrumentom, koji se u RViz-u pomiče sliderima ([Model ruke u RViz-u](#model-ruke-u-rviz-u)),
 - SOFA s LapGym scenama, u kojoj se instrument upravlja tipkovnicom, bez ruke ([SOFA bez ruke](#sofa-bez-ruke)).
 
@@ -92,33 +92,6 @@ tmux kill-session -t sofa_teleop
 ```
 
 ![SOFA bez ruke](media/teleop.png)
-
-## Stvarna ruka s driverom
-AgileX driver ([agx_arm_ros](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2)) sam prima zadane položaje zglobova na `/control/joint_states` i objavljuje izmjerene na `/feedback/joint_states`. Položaje dalje regulira firmware Pipera, pa za upravljanje sliderima nije potreban nikakav naš kod. Kontejner (`run_piper.sh`) već radi s `--net=host --privileged`, pa vidi CAN sučelje računala.
-
-1. Spojite ruku preko USB-CAN adaptera i u kontejneru aktivirajte CAN:
-   ```bash
-   cd ~/agx_arm_ws/src/agx_arm_ros/scripts && bash can_activate.sh
-   ```
-2. Pokrenite driver s RViz-om i sliderima:
-   ```bash
-   ros2 launch agx_arm_ctrl start_single_agx_arm_rviz.launch.py can_port:=can0 arm_type:=piper effector_type:=none follow:=true control:=true speed_percent:=10
-   ```
-   `control:=true` pokreće slidere koji objavljuju na `/control/joint_states`, a `follow:=true` u RViz-u prikazuje stvarnu ruku (`/feedback/joint_states`). Sa `control:=false` driver samo prikazuje ruku i ne pomiče je. Ovaj RViz prikazuje model Pipera bez adaptera.
-3. Jedna naredba bez slidera, iz drugog terminala (pokrenite driver sa `control:=false`):
-   ```bash
-   cd ~/agx_arm_ws/src/agx_arm_ros
-   ros2 topic pub /control/move_j sensor_msgs/msg/JointState "$(cat test/piper/test_move_j.yaml)" -1
-   ```
-4. Zaustavljanje u nuždi (ruka drži trenutnu pozu) i isključivanje motora:
-   ```bash
-   ros2 service call /emergency_stop std_srvs/srv/Empty
-   ros2 service call /enable_agx_arm std_srvs/srv/SetBool "{data: false}"
-   ```
-
-Ostali topici i parametri drivera (`speed_percent`, `fast_mode`, `move_p`, `move_l` ...) opisani su u [njegovom README-u](https://github.com/agilexrobotics/agx_arm_ros/blob/ros2/README_EN.md).
-
-Model s adapterom možete gledati i uz stvarnu ruku: pokrenite driver bez RViz-a (`ros2 launch agx_arm_ctrl start_single_agx_arm.launch.py can_port:=can0 arm_type:=piper speed_percent:=10`), a zatim `ros2 launch /root/davinci_piper/davinci_piper.launch.py follow:=true`. RViz tada prikazuje stvarnu ruku, a slideri je pomiču.
 
 ## Adapter i instrument
 Model robota je [docker/davinci/piper_davinci.urdf.xacro](docker/davinci/piper_davinci.urdf.xacro) ([xacro](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/URDF/Using-Xacro-to-Clean-Up-a-URDF-File.html), [URDF](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/URDF/URDF-Main.html)). Uključuje službeni model Pipera iz `agx_arm_description` i na njegov zadnji link `link6` dodaje adapter i instrument fiksnim zglobovima:
