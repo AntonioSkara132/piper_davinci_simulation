@@ -9,13 +9,12 @@ U ovom projektu ruka [AgileX Piper](https://github.com/agilexrobotics/agx_arm_ro
 - **[ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)** povezuje programe porukama na topicima, a **[RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html)** prikazuje model ruke s adapterom i instrumentom.
 - **[Docker](https://docs.docker.com/get-started/)** pakira sve to u jedan kontejner, pa na svoje računalo instalirate samo Docker (vidi [Postavljanje Dockera](#postavljanje-dockera)).
 
-Slika sadrži:
+Slika sadrži odvojene dijelove:
 - upravljački program (driver) za Pipera,
 - model ruke s adapterom i instrumentom, koji se u RViz-u pomiče sliderima ([Model ruke u RViz-u](#model-ruke-u-rviz-u)),
-- SOFA s LapGym scenama, u kojoj instrument prati okvire instrumenta iz TF-a ([Ruka u SOFA-i](#ruka-u-sofa-i)),
-- SOFA s LapGym scenama u kojoj se instrument upravlja tipkovnicom, bez ruke ([SOFA bez ruke](#sofa-bez-ruke)).
+- SOFA s LapGym scenama, u kojoj se instrument upravlja tipkovnicom, bez ruke ([SOFA bez ruke](#sofa-bez-ruke)).
 
-Upravljanje rukom i adapterom vaš je zadatak ([Zadatak](#zadatak-upravljanje)). Animacija ispod pokazuje kako to može izgledati.
+Ruka i simulacija nisu povezane: to povezivanje i upravljanje rukom vaš su zadatak ([Zadatak](#zadatak-povezivanje-ruke-i-simulacije)). Animacija ispod pokazuje kako to može izgledati kad je napravljeno.
 
 [![Demo](media/demo.gif)](media/demo.mp4)
 
@@ -69,37 +68,9 @@ Unutar kontejnera:
 ```bash
 ros2 launch /root/davinci_piper/davinci_piper.launch.py
 ```
-Otvaraju se RViz s modelom ruke, adaptera i instrumenta i prozor sa sliderima zglobova: `joint1` … `joint6` ruke i četiri zgloba adaptera:
-
-| Zglob | Što pomiče |
-|---|---|
-| `instrument_roll` | okretanje osovine instrumenta oko svoje osi |
-| `instrument_pitch` | pitch zgloba na kraju osovine (oko osi y) |
-| `instrument_jaw_1`, `instrument_jaw_2` | čeljusti (oko osi x). Njihova srednja vrijednost je yaw zgloba, a pola razlike otvorenost čeljusti |
-
-Slideri objavljuju položaje zglobova na `/control/joint_states` i kreću iz poze u kojoj instrument stoji ispred ruke, s osovinom prema naprijed i dolje, i čeljustima otvorenima 20° na svaku stranu. `robot_state_publisher` iz njih računa TF, pa se pomiču i okviri instrumenta. S `arm:=none` slideri se ne pokreću i položaje objavljuje vaš program.
-
-Adapter i instrument opisani su u zasebnoj datoteci `davinci_adapter.urdf.xacro`, koju `piper_davinci.urdf.xacro` uključuje na prirubnicu ruke.
+Otvaraju se RViz s modelom ruke, adaptera i instrumenta i prozor sa sliderima zglobova `joint1` … `joint6`. Slideri objavljuju položaje zglobova na `/control/joint_states` i kreću iz poze u kojoj instrument stoji ispred ruke, s osovinom prema naprijed i dolje. `robot_state_publisher` iz njih računa TF, pa se pomiče i okvir `instrument_wrist` na vrhu instrumenta. S `arm:=none` slideri se ne pokreću i položaje objavljuje vaš program.
 
 ![Model ruke sa sliderima](media/sliders.png)
-
-### Ruka u SOFA-i
-```bash
-run_davinci_piper --rings
-```
-Pokreće model ruke sa sliderima i scenu s prstenovima; bez `--rings` pokreće se scena s organom. Instrument u SOFA-i prati TF: `piper_tool_bridge` čita okvire instrumenta i šalje ih SOFA-i, pa se instrument pomiče sa sliderima ruke, a zglob i čeljusti sa sliderima adaptera. Baza ruke stoji na stalnom mjestu u sceni: u početnoj pozi slidera instrument je ondje gdje ga scena inače postavlja.
-
-![Prsten uhvaćen i podignut sliderima](media/sofa_sliders.png)
-
-Opcije:
-- `--no-arm`: bez slidera; položaje zglobova objavljuje vaš program,
-- `--follow`: stvarna ruka (prvo pokrenite driver). Prikazuju se njezini izmjereni položaji, a slideri je pomiču,
-- `--base X Y Z QX QY QZ QW`: drugo mjesto baze u sceni (mm i kvaternion).
-
-U oknu SOFA-e `r` + `Enter` ponovno pokreće scenu. Zaustavljanje:
-```bash
-tmux kill-session -t davinci_piper
-```
 
 ### SOFA bez ruke
 ```bash
@@ -125,27 +96,31 @@ tmux kill-session -t sofa_teleop
 ## Topici i TF
 | Topic / okvir | Tip | Što je |
 |---|---|---|
-| `/control/joint_states` | `sensor_msgs/JointState` | zadani položaji zglobova ruke (`joint1` … `joint6`) i adaptera (`instrument_*`) u radijanima; stvarnu ruku driver pomiče u položaje `joint1` … `joint6`, a ostale zanemaruje |
+| `/control/joint_states` | `sensor_msgs/JointState` | zadani položaji zglobova `joint1` … `joint6` u radijanima; stvarnu ruku driver pomiče u njih |
 | `/feedback/joint_states` | `sensor_msgs/JointState` | izmjereni položaji zglobova stvarne ruke, objavljuje ih driver |
-| `/joint_states` | `sensor_msgs/JointState` | svi zglobovi zajedno, za `robot_state_publisher`; objavljuje ih `joint_state_merger` |
-| TF `base_link` → `instrument_wrist` | TF | poza zgloba na kraju osovine (s rollom); z gleda duž osovine prema van, x je os čeljusti |
-| TF `instrument_wrist` → `instrument_clevis` → `instrument_jaw_1`, `instrument_jaw_2` | TF | pitch zgloba i čeljusti |
-| UDP 5006 | JSON | `piper_tool_bridge` → SOFA: `{"tool_pose": [x, y, z, qx, qy, qz, qw], "pitch": °, "jaws": [°, °]}`, poza u metrima u okviru `base_link` |
+| TF `base_link` → `instrument_wrist` | TF | poza vrha instrumenta, računa je `robot_state_publisher` iz položaja zglobova |
 | `/robot/cmd_vel` | `geometry_msgs/Twist` | tipke hvataljke u `run_sofa_teleop`; `twist_socket_bridge` ih šalje SOFA-i kao UDP poruku `{"vel": [vx, vy, vz, wx, wy, wz]}` |
 
-`joint_state_merger` uzima zglobove adaptera s `/control/joint_states`, a zglobove ruke s `/control/joint_states` ili, s `follow:=true`, s `/feedback/joint_states`. Zglob adaptera koji još nitko nije objavio ostaje u početnom položaju. Iz vlastitog programa upravljate tako da pokrenete `run_davinci_piper --no-arm` (ili launch s `arm:=none`) i sami objavljujete `JointState` na `/control/joint_states`, s trenutnim vremenom u `header.stamp`. Na primjer, iz drugog terminala u kontejneru:
+`davinci_piper.launch.py` prikazuje `/control/joint_states`, a s `follow:=true` `/feedback/joint_states`. Iz vlastitog programa rukom upravljate tako da launch pokrenete s `arm:=none` i sami objavljujete `JointState` na `/control/joint_states`, s trenutnim vremenom u `header.stamp`. Na primjer, iz drugog terminala u kontejneru:
 ```bash
 ros2 topic pub -r 20 /control/joint_states sensor_msgs/msg/JointState \
-  "{header: auto, name: [joint1, joint2, joint3, joint4, joint5, joint6, instrument_roll, instrument_pitch, instrument_jaw_1, instrument_jaw_2],
-    position: [0.154, 1.097, -1.151, 1.377, -0.792, 0.351, 0.0, 0.3, 0.35, -0.35]}"
+  "{header: auto, name: [joint1, joint2, joint3, joint4, joint5, joint6], position: [0.154, 1.097, -1.151, 1.377, -0.792, 0.351]}"
 ```
 
-## Zadatak: upravljanje
+## Zadatak: povezivanje ruke i simulacije
+U slici postoje dva odvojena lanca:
 ```
-slideri / vaš čvor ──/control/joint_states──> joint_state_merger ──> robot_state_publisher ──TF──> piper_tool_bridge ──UDP──> SOFA
+slideri / vaš čvor ──/control/joint_states──> robot_state_publisher ──TF base_link → instrument_wrist
                                      └──> driver ──> stvarna ruka
+
+tipkovnica ──/robot/cmd_vel──> twist_socket_bridge ──UDP──> SOFA (LapGym hvataljka)
 ```
-Sliderima se svaki zglob pomiče zasebno. Vaš je zadatak napisati čvor koji iz željenog gibanja vrha instrumenta računa položaje zglobova ruke i adaptera i objavljuje ih na `/control/joint_states`. Isti čvor tada radi i u simulaciji i na stvarnoj ruci, jer obje čitaju taj topic.
+Treba ih spojiti tako da instrument u SOFA-i prati okvir `instrument_wrist`, a stupnjevi slobode adaptera (roll, pitch i yaw zgloba, hvat) upravljaju se posebno. Za to je potrebno:
+- čitati pozu `base_link` → `instrument_wrist` iz TF-a i slati je SOFA-i, npr. preko UDP-a kao `twist_socket_bridge`, jer SOFA radi u svom Python okruženju bez ROS-a;
+- u SOFA-i postaviti bazu ruke u scenu i pomicati instrument prema primljenoj pozi;
+- odvojeno slati naredbe za stupnjeve slobode adaptera. LapGym hvataljke u sceni s organom i u sceni s prstenovima prilagođene su za to (`sofa_env_sofa25.patch`): imaju zglob zapešća i čeljusti kojima se upravlja odvojeno.
+
+Kad je to napravljeno, vlastito upravljanje radi jednako u simulaciji i na stvarnoj ruci, jer obje čitaju `/control/joint_states`.
 
 ## Rad na projektu
 Kod je u mapi [docker](docker). Driver za Piper nije u njoj: Dockerfile ga pri izgradnji slike klonira iz [AgileX repozitorija](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) u `/root/agx_arm_ws`. U driver nismo ništa dodavali niti smo ga mijenjali.
@@ -156,19 +131,13 @@ docker/
 ├── run_piper.sh                  pokreće kontejner piper-jazzy na računalu
 │
 ├── davinci/          → u kontejneru /root/davinci_piper/   (model ruke)
-│   ├── piper_davinci.urdf.xacro  model: Piper + adapter
-│   ├── davinci_adapter.urdf.xacro adapter i instrument s pomičnim zglobovima
+│   ├── piper_davinci.urdf.xacro  model: Piper + adapter + instrument
 │   ├── meshes/                   ovdje stavljate STL svog adaptera
-│   ├── davinci_piper.launch.py   robot_state_publisher, joint_state_merger, slideri, RViz
-│   ├── davinci_piper.rviz        postavke RViz-a
-│   ├── joint_state_merger.py     spaja zglobove ruke i adaptera u /joint_states
-│   ├── piper_tool_bridge.py      okviri instrumenta iz TF-a → UDP prema SOFA-i
-│   ├── run_davinci_piper.sh      naredba run_davinci_piper
-│   └── tile_windows.sh           slaže prozore
+│   ├── davinci_piper.launch.py   robot_state_publisher, slideri, RViz
+│   └── davinci_piper.rviz        postavke RViz-a
 │
 └── sofa/             → u kontejneru /opt/sofa_teleop/      (SOFA dio)
     ├── lapgym_keyboard_teleop.py upravljanje LapGym hvataljkom tipkama, prozor SOFA-e
-    ├── davinci_piper_scene.py    scena u kojoj instrument prati okvire iz TF-a
     ├── twist_socket_bridge.py    /robot/cmd_vel → UDP prema SOFA-i
     ├── run_sofa_teleop.sh        naredba run_sofa_teleop
     ├── sofa-python               pokreće Python sa SOFA-om

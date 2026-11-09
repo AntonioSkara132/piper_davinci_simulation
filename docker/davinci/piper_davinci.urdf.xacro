@@ -1,17 +1,42 @@
 <?xml version="1.0"?>
 <!--
   AgileX Piper with a da Vinci Si instrument adaptor on its flange, carrying an 8 mm da Vinci Si
-  instrument. The adaptor and instrument are in davinci_adapter.urdf.xacro.
+  instrument.
 
   Load it with:
-    ros2 launch /root/davinci_piper/davinci_piper.launch.py
+    ros2 launch agx_arm_description display.launch.py custom_model:=/root/davinci_piper/piper_davinci.urdf.xacro
 
-  Joints: joint1 ... joint6 of the Piper, then the adaptor's instrument_roll, instrument_pitch,
-  instrument_jaw_1 and instrument_jaw_2.
+  The adaptor mesh is not included: put your adaptor's STL in docker/davinci/meshes/ and add it as
+  the visual of the davinci_adapter link below (see the comment there). Until then RViz shows the
+  instrument without the adaptor.
+
+  The davinci_adapter frame and the instrument offsets below are set for the open-platform adaptor
+  (https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments), whose CAD frame is:
+    - the mounting plate is the face at y = -9.1 mm, between two side walls that reach y = -25.4 mm;
+    - the four drive discs face +y, and the instrument housing sits on them;
+    - the housing's long axis is z, and the instrument shaft leaves the housing towards +z.
+  For another adaptor, change adapter_plate_y, the adapter_mount joint and the instrument properties.
+  The instrument housing, shaft length and shaft height are estimates of a da Vinci Si EndoWrist
+  instrument.
+
+  instrument_wrist is the frame the SOFA simulation follows: its origin is the wrist at the end of
+  the shaft, z points along the shaft out of the instrument, x is the jaw hinge axis.
 -->
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="piper_davinci">
   <xacro:include filename="$(find agx_arm_description)/agx_arm_urdf/piper/urdf/piper_description.urdf"/>
-  <xacro:include filename="davinci_adapter.urdf.xacro"/>
+
+  <xacro:property name="mesh_dir" value="file:///root/davinci_piper/meshes"/>
+  <!-- flange top face above link6 (flange.stl is 10.5 mm tall) -->
+  <xacro:property name="flange_height" value="0.0105"/>
+  <!-- adaptor mounting plate underside, in the adaptor CAD frame -->
+  <xacro:property name="adapter_plate_y" value="-0.0091"/>
+  <!-- instrument estimates (metres, adaptor CAD frame) -->
+  <xacro:property name="housing_size" value="0.060 0.035 0.110"/>
+  <xacro:property name="housing_center" value="0 0.0975 0"/>
+  <xacro:property name="shaft_axis_y" value="0.090"/>
+  <xacro:property name="shaft_start_z" value="0.055"/>
+  <xacro:property name="shaft_length" value="0.430"/>
+  <xacro:property name="shaft_radius" value="0.004"/>
 
   <link name="flange_link">
     <visual>
@@ -26,6 +51,59 @@
     <origin xyz="0 0 0" rpy="0 0 0"/>
   </joint>
 
-  <!-- flange top face above link6 (flange.stl is 10.5 mm tall) -->
-  <xacro:davinci_adapter parent="flange_link" z="0.0105"/>
+  <!-- Adaptor frame = CAD frame. Rotating +90 deg about x puts the CAD +y (away from the plate)
+       along the flange z axis, and the instrument direction (+z) along the flange -y axis. -->
+  <link name="davinci_adapter">
+    <!-- Add your adaptor's mesh here, e.g. for docker/davinci/meshes/my_adapter.stl in millimetres:
+    <visual>
+      <geometry>
+        <mesh filename="${mesh_dir}/my_adapter.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <material name="adapter_grey"><color rgba="0.75 0.77 0.82 1"/></material>
+    </visual>
+    -->
+    <inertial>
+      <mass value="0.6"/>
+      <origin xyz="0 0.03 0"/>
+      <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+    </inertial>
+  </link>
+  <joint name="adapter_mount" type="fixed">
+    <parent link="flange_link"/>
+    <child link="davinci_adapter"/>
+    <origin xyz="0 0 ${flange_height - adapter_plate_y}" rpy="${pi/2} 0 0"/>
+  </joint>
+
+  <link name="instrument_housing">
+    <visual>
+      <geometry><box size="${housing_size}"/></geometry>
+      <material name="instrument_blue"><color rgba="0.20 0.35 0.75 1"/></material>
+    </visual>
+  </link>
+  <joint name="instrument_housing_mount" type="fixed">
+    <parent link="davinci_adapter"/>
+    <child link="instrument_housing"/>
+    <origin xyz="${housing_center}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="instrument_shaft">
+    <visual>
+      <!-- URDF cylinders lie along their local z axis -->
+      <origin xyz="0 0 ${shaft_length/2}"/>
+      <geometry><cylinder radius="${shaft_radius}" length="${shaft_length}"/></geometry>
+      <material name="shaft_dark"><color rgba="0.15 0.15 0.15 1"/></material>
+    </visual>
+  </link>
+  <joint name="instrument_shaft_mount" type="fixed">
+    <parent link="davinci_adapter"/>
+    <child link="instrument_shaft"/>
+    <origin xyz="0 ${shaft_axis_y} ${shaft_start_z}" rpy="0 0 0"/>
+  </joint>
+
+  <link name="instrument_wrist"/>
+  <joint name="instrument_wrist_frame" type="fixed">
+    <parent link="instrument_shaft"/>
+    <child link="instrument_wrist"/>
+    <origin xyz="0 0 ${shaft_length}" rpy="0 0 0"/>
+  </joint>
 </robot>

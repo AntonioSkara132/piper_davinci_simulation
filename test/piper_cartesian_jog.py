@@ -2,22 +2,15 @@
 """Keyboard Cartesian control of the Piper: move the da Vinci instrument tip with teleop_twist_keyboard.
 
 Test tool, not part of the image: it is used to check the simulation (test/run_tests.sh) and can
-serve as a starting point for your own control. To try it, install it into the container and start
+serve as a starting point for your own control. To try it, copy it into the container and start
 the simulation with --jog:
-    test/install.sh
-    docker exec piper-jazzy run_davinci_piper --jog
+    docker cp test/piper_cartesian_jog.py piper-jazzy:/root/davinci_piper/
+    docker exec piper-jazzy /root/davinci_piper/run_davinci_piper.sh --jog
 
 Subscribes to a Twist (from teleop_twist_keyboard), moves a target pose of the instrument wrist
 (frame instrument_wrist) in the Piper base frame, solves the inverse kinematics for joint1..joint6,
-and publishes the joint positions on control/joint_states. In simulation joint_state_merger reads
+and publishes the joint positions on control/joint_states. In simulation robot_state_publisher reads
 that topic; with the real arm the agx_arm driver reads it and moves the arm.
-
-A second Twist on /davinci/cmd_vel (another teleop_twist_keyboard) moves the adaptor joints, which
-are published on control/joint_states too:
-    j / l     instrument_roll (90 deg/s)
-    i / ,     instrument_pitch (60 deg/s)
-    t / b     wrist yaw: both jaws turn together (60 deg/s)
-    J / L     close / open the jaws (40 deg/s)
 
 teleop_twist_keyboard keys (at its default speed 0.5 / turn 1.0):
     i / ,     instrument tip forward / back (base x)
@@ -63,9 +56,6 @@ READY_POSE = [0.154, 1.097, -1.151, 1.377, -0.792, 0.351]
 KEYBOARD_LINEAR = 0.5
 KEYBOARD_ANGULAR = 1.0
 WEIGHTS = np.diag([1.0, 1.0, 1.0, 0.3, 0.3, 0.02])
-# Adaptor key rates (degrees per second at teleop_twist_keyboard's default speeds) and limits.
-ROLL_RATE, PITCH_RATE, YAW_RATE, GRIP_RATE = 90.0, 60.0, 60.0, 40.0
-PITCH_MAX, JAW_MAX, GRIP_MAX = 80.0, 80.0, 35.0
 
 
 def rpy_matrix(roll: float, pitch: float, yaw: float) -> np.ndarray:
@@ -109,9 +99,7 @@ class Chain:
             rpy = [float(v) for v in (origin.get("rpy") if origin is not None and origin.get("rpy") else "0 0 0").split()]
             t = np.eye(4)
             t[:3, :3], t[:3, 3] = rpy_matrix(*rpy), xyz
-            # The adaptor's roll joint lies in the chain; it turns the instrument about its own shaft and
-            # does not move the wrist, so the inverse kinematics leaves it at zero.
-            index = JOINTS.index(j.get("name")) if j.get("type") == "revolute" and j.get("name") in JOINTS else None
+            index = JOINTS.index(j.get("name")) if j.get("type") == "revolute" else None
             axis = np.array([float(v) for v in j.find("axis").get("xyz").split()]) if j.find("axis") is not None else np.array([1.0, 0, 0])
             if index is not None:
                 limit = j.find("limit")
@@ -169,14 +157,11 @@ class PiperCartesianJog(Node):
         self.q = np.array(READY_POSE)
         self.target = None
         self.twist = np.zeros(6)
-        self.adapter_twist = np.zeros(6)
-        self.roll, self.pitch, self.yaw, self.grip = 0.0, 0.0, 0.0, 20.0  # degrees
         self.waiting_for_seed = bool(self.get_parameter("seed_topic").value)
 
         latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.create_subscription(String, "robot_description", self.on_description, latched)
         self.create_subscription(Twist, "cmd_vel", self.on_twist, 10)
-        self.create_subscription(Twist, "/davinci/cmd_vel", self.on_adapter_twist, 10)
         if self.waiting_for_seed:
             self.create_subscription(JointState, self.get_parameter("seed_topic").value, self.on_seed, 10)
         self.publisher = self.create_publisher(JointState, "control/joint_states", 10)
@@ -198,20 +183,9 @@ class PiperCartesianJog(Node):
     def on_twist(self, msg: Twist) -> None:
         self.twist = np.array([msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.x, msg.angular.y, msg.angular.z])
 
-    def on_adapter_twist(self, msg: Twist) -> None:
-        self.adapter_twist = np.array([msg.linear.x, msg.linear.y, msg.linear.z, msg.angular.x, msg.angular.y, msg.angular.z])
-
-    def move_adapter(self) -> None:
-        v = self.adapter_twist
-        self.roll = float(np.clip(self.roll + v[5] / KEYBOARD_ANGULAR * ROLL_RATE * self.dt, -180.0, 180.0))
-        self.pitch = float(np.clip(self.pitch + v[0] / KEYBOARD_LINEAR * PITCH_RATE * self.dt, -PITCH_MAX, PITCH_MAX))
-        self.grip = float(np.clip(self.grip - v[1] / KEYBOARD_LINEAR * GRIP_RATE * self.dt, 0.0, GRIP_MAX))  # J (+y) closes
-        self.yaw = float(np.clip(self.yaw + v[2] / KEYBOARD_LINEAR * YAW_RATE * self.dt, -(JAW_MAX - self.grip), JAW_MAX - self.grip))
-
     def update(self) -> None:
         if self.chain is None or self.waiting_for_seed:
             return
-        self.move_adapter()
         if self.target is None:
             self.target = self.chain.fk(self.q)
 
@@ -246,9 +220,8 @@ class PiperCartesianJog(Node):
 
         msg = JointState()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.name = JOINTS + ["instrument_roll", "instrument_pitch", "instrument_jaw_1", "instrument_jaw_2"]
-        adapter = np.radians([self.roll, self.pitch, self.yaw + self.grip, self.yaw - self.grip])
-        msg.position = self.q.tolist() + adapter.tolist()
+        msg.name = JOINTS
+        msg.position = self.q.tolist()
         self.publisher.publish(msg)
 
 

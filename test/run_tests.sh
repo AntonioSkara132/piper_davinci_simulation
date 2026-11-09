@@ -11,7 +11,6 @@ bash /tmp/t2/install.sh
 S="davinci_piper:teleop.0"
 READY="0.154, 1.097, -1.151, 1.377, -0.792, 0.351"
 NAMES="name: [joint1, joint2, joint3, joint4, joint5, joint6]"
-ALL_NAMES="name: [joint1, joint2, joint3, joint4, joint5, joint6, instrument_roll, instrument_pitch, instrument_jaw_1, instrument_jaw_2]"
 
 pass() { echo "PASS  $*"; }
 fail() { echo "FAIL  $*"; }
@@ -37,12 +36,11 @@ node_running() {  # the ROS graph takes a moment to settle, so ask a few times
     for _ in 1 2 3 4 5; do ros2 node list 2>/dev/null | grep -qx "$1" && return 0; sleep 1; done
     return 1
 }
-pub_joints() {  # pub_joints <topic> <seconds> <positions> [names]
-    timeout "$2" ros2 topic pub -r 20 "$1" sensor_msgs/msg/JointState "{header: auto, ${4:-$NAMES}, position: [$3]}" > /dev/null 2>&1
+pub_joints() {  # pub_joints <topic> <seconds> <positions>
+    timeout "$2" ros2 topic pub -r 20 "$1" sensor_msgs/msg/JointState "{header: auto, $NAMES, position: [$3]}" > /dev/null 2>&1
 }
-wrist() { status | grep -o 'wrist at \[[^]]*\]'; }
 
-echo "=== A: ring scene, --jog (ARM keys and INSTRUMENT keys), tiling, grasp, reset"
+echo "=== A: ring scene, --jog (ARM keys) and INSTRUMENT keys, tiling, grasp, reset"
 check "A1 ring scene starts" "start --rings --jog"
 sleep 8
 shot A_start
@@ -60,26 +58,24 @@ shot A_grasped
 python3 /tmp/t2/moves.py lift
 wait_status
 check "A8 still grasped after lifting" "status | grep -q ' grasped' && status | grep -qv 'not grasped'"
-p1=$(wrist)
 tmux send-keys -t "$S" r Enter
-sleep 3; wait_status; wait_status
+sleep 3; wait_status
 status
-check "A9 reset: ring released, instrument back where the arm holds it" "status | grep -q 'not grasped' && [ \"\$(wrist)\" = \"\$p1\" ]"
+check "A9 reset: ring released, wrist back to start" "status | grep -q 'wrist at \[0.0, 65.0, 20.0\]' && status | grep -q 'not grasped'"
 sleep 2; shot A_after_reset
 # ARM keys pane: a real key press through teleop_twist_keyboard
-p1=$(wrist)
 tmux send-keys -t davinci_piper:teleop.1 t; sleep 1; tmux send-keys -t davinci_piper:teleop.1 k
 sleep 1; wait_status
 status
-check "A10 ARM key t moves the wrist" "[ \"\$(wrist)\" != \"\$p1\" ]"
+check "A10 ARM key t moves the wrist up" "status | grep -qv 'wrist at \[0.0, 65.0, 20.0\]'"
 tmux send-keys -t davinci_piper:teleop.2 L; sleep 1; tmux send-keys -t davinci_piper:teleop.2 k
 sleep 1; wait_status
 status
-check "A11 INSTRUMENT key L opens the jaws (jaw_1 > 0)" "status | grep -oE 'jaws +-?[0-9]+' | awk '{exit !(\$2 > 0)}'"
-tmux send-keys -t davinci_piper:teleop.2 i; sleep 1; tmux send-keys -t davinci_piper:teleop.2 k
-sleep 1; wait_status
-status
-check "A12 INSTRUMENT key i pitches the wrist (pitch > 20)" "status | grep -oE 'pitch +-?[0-9]+' | awk '{exit !(\$2 > 20)}'"
+check "A11 INSTRUMENT key L opens the jaws (grip > 20)" "status | grep -oE 'grip +[0-9]+' | awk '{exit !(\$2 > 20)}'"
+p1=$(status | grep -o 'wrist at \[[^]]*\]')
+tmux send-keys -t "$S" a Enter; sleep 1; wait_status
+p2=$(status | grep -o 'wrist at \[[^]]*\]'); echo "$p1 -> $p2"
+check "A12 re-anchor keeps the instrument where it is" "[ \"\$p1\" = \"\$p2\" ]"
 stop
 
 echo "=== B: organ scene"
@@ -110,11 +106,7 @@ pub_joints /control/joint_states 8 "$READY"
 wait_status; s1=$(status | grep -o 'wrist at \[[^]]*\]'); echo "$s1"
 pub_joints /control/joint_states 8 "0.254, 1.097, -1.151, 1.377, -0.792, 0.351"
 wait_status; s2=$(status | grep -o 'wrist at \[[^]]*\]'); echo "$s2"
-check "D3 SOFA follows the published joint states" "status | grep -qv 'no instrument frames' && [ \"\$s1\" != \"\$s2\" ]"
-check "D4 adaptor joints at their defaults (pitch 0, jaws 20 -20)" "status | grep -q 'pitch 0  jaws 20 -20'"
-pub_joints /control/joint_states 8 "$READY, 0.5, 0.6, 0.2, -0.4" "$ALL_NAMES"
-wait_status; status
-check "D5 pitch and jaws come from the adaptor joints over TF" "status | grep -q 'pitch 34  jaws 11 -23'"
+check "D3 SOFA follows the published joint states" "status | grep -qv 'no Piper pose' && [ \"\$s1\" != \"\$s2\" ]"
 stop
 
 echo "=== E: --follow without a real arm (fake feedback)"
@@ -126,7 +118,7 @@ python3 /tmp/t2/moves.py up_short
 check "E2 jog publishes on /control/joint_states after feedback" "timeout 5 ros2 topic echo --once /control/joint_states > /dev/null 2>&1"
 kill $FB 2>/dev/null
 wait_status; status
-check "E3 SOFA shows the feedback pose" "status | grep -qv 'no instrument frames'"
+check "E3 SOFA shows the feedback pose" "status | grep -qv 'no Piper pose'"
 stop
 
 echo "=== F: all 14 LapGym scenes"
@@ -162,7 +154,6 @@ for _ in $(seq 60); do sleep 1; wmctrl -l | grep -q "Joint State Publisher" && w
 sleep 5
 check "H1 RViz and slider windows open" "wmctrl -l | grep -q 'Joint State Publisher' && wmctrl -l | grep -q ' - RViz'"
 check "H2 TF base_link -> instrument_wrist" "timeout 10 ros2 run tf2_ros tf2_echo base_link instrument_wrist 2>/dev/null | grep -q Translation"
-check "H3 TF base_link -> instrument_jaw_1" "timeout 10 ros2 run tf2_ros tf2_echo base_link instrument_jaw_1 2>/dev/null | grep -q Translation"
 r=$(wmctrl -l | awk '/ - RViz/ {print $1; exit}'); s=$(wmctrl -l | awk '/Joint State Publisher/ {print $1; exit}')
 wmctrl -i -r "$r" -e 0,0,0,1500,1050; wmctrl -i -r "$s" -e 0,1510,0,400,1050
 sleep 3

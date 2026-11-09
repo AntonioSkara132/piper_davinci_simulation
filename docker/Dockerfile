@@ -95,8 +95,7 @@ RUN if [ "$WITH_SOFA" = "true" ]; then \
 # The patch ports the LapGym scenes from SOFA v24.06 to v25.12 and NumPy 2, and gives the
 # grasp_lift_touch and pick_and_place grippers an optional wrist joint and independently driven
 # jaws (the degrees of freedom of the da Vinci adaptor). The scripts are the keyboard teleop scene,
-# the ROS-to-UDP bridge, a smoke test, the launcher run_sofa_teleop, and the scene that follows the
-# Piper's TF (davinci_piper_scene.py, started by run_davinci_piper).
+# the ROS-to-UDP bridge, a smoke test and the launcher run_sofa_teleop.
 COPY sofa/ /opt/sofa_teleop/
 RUN if [ "$WITH_SOFA" = "true" ]; then \
         git -C /opt/sofa_env apply /opt/sofa_teleop/sofa_env_sofa25.patch \
@@ -105,18 +104,9 @@ RUN if [ "$WITH_SOFA" = "true" ]; then \
         && install -m 755 /opt/sofa_teleop/run_sofa_teleop.sh /usr/local/bin/run_sofa_teleop ; \
     fi
 
-# Piper with the da Vinci adaptor: URDF model with the adaptor's joints, a launch file that shows it
-# in RViz with joint sliders, and run_davinci_piper, which drives the SOFA scene from TF (xterm, wmctrl
-# and xprop arrange its windows). The adaptor mesh is not included; students put their own STL in
-# davinci/meshes/.
+# Piper with the da Vinci adaptor: URDF model, and a launch file that shows it in RViz with joint
+# sliders. The adaptor mesh is not included; students put their own STL in davinci/meshes/.
 COPY davinci/ /root/davinci_piper/
-RUN mkdir -p /root/davinci_piper/meshes \
-    && chmod 755 /root/davinci_piper/*.sh /root/davinci_piper/*.py \
-    && if [ "$WITH_SOFA" = "true" ]; then \
-        apt-get update && apt-get install -y --no-install-recommends xterm wmctrl x11-utils \
-        && rm -rf /var/lib/apt/lists/* \
-        && ln -s /root/davinci_piper/run_davinci_piper.sh /usr/local/bin/run_davinci_piper ; \
-    fi
 
 # Every shell in the container has ROS 2 and the driver workspace loaded.
 RUN echo 'source /opt/ros/jazzy/setup.bash' >> /root/.bashrc \
