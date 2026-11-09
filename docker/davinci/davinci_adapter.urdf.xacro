@@ -1,0 +1,151 @@
+<?xml version="1.0"?>
+<!--
+  da Vinci Si instrument adaptor with an 8 mm da Vinci Si instrument, as a xacro macro:
+
+    <xacro:include filename="davinci_adapter.urdf.xacro"/>
+    <xacro:davinci_adapter parent="flange_link" z="0.0105"/>
+
+  parent is the link the adaptor's mounting plate sits on, z the height of that link's top face.
+
+  The adaptor drives four degrees of freedom of the instrument, which are the movable joints here:
+    instrument_roll     the shaft turns about its own axis (z)
+    instrument_pitch    the wrist at the end of the shaft turns about y
+    instrument_jaw_1    the jaws turn about x, 9 mm past the wrist. jaw_1 opens towards positive angles,
+    instrument_jaw_2    jaw_2 towards negative ones. Their mean is the yaw of the wrist, half their
+                        difference is how far the jaws are open.
+
+  Frames:
+    davinci_adapter     the adaptor CAD frame (see below)
+    instrument_wrist    the wrist at the end of the shaft, after the roll: z along the shaft out of the
+                        instrument, x the jaw hinge axis. The SOFA simulation places its instrument here.
+    instrument_clevis   the wrist after the pitch
+    instrument_jaw_1/2  the jaws
+
+  The adaptor mesh is not included: put your adaptor's STL in docker/davinci/meshes/ and add it as the
+  visual of the davinci_adapter link below (see the comment there).
+
+  The davinci_adapter frame and the instrument offsets below are set for the open-platform adaptor
+  (https://github.com/Manaf2584/Open-Platform-adaptor-for-da-vinci-si-instruments), whose CAD frame is:
+    - the mounting plate is the face at y = -9.1 mm, between two side walls that reach y = -25.4 mm;
+    - the four drive discs face +y, and the instrument housing sits on them;
+    - the housing's long axis is z, and the instrument shaft leaves the housing towards +z.
+  For another adaptor, change adapter_plate_y, the adapter_mount joint and the instrument properties.
+  The instrument housing, shaft length and shaft height are estimates of a da Vinci Si EndoWrist
+  instrument. The joint limits are those of the SOFA instrument.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+  <xacro:macro name="davinci_adapter" params="parent z">
+    <xacro:property name="mesh_dir" value="file:///root/davinci_piper/meshes"/>
+    <!-- adaptor mounting plate underside, in the adaptor CAD frame -->
+    <xacro:property name="adapter_plate_y" value="-0.0091"/>
+    <!-- instrument estimates (metres, adaptor CAD frame) -->
+    <xacro:property name="housing_size" value="0.060 0.035 0.110"/>
+    <xacro:property name="housing_center" value="0 0.0975 0"/>
+    <xacro:property name="shaft_axis_y" value="0.090"/>
+    <xacro:property name="shaft_start_z" value="0.055"/>
+    <xacro:property name="shaft_length" value="0.430"/>
+    <xacro:property name="shaft_radius" value="0.004"/>
+    <!-- wrist pitch axis to jaw hinge, jaw length (metres) -->
+    <xacro:property name="wrist_to_jaw" value="0.009"/>
+    <xacro:property name="jaw_length" value="0.010"/>
+    <xacro:property name="deg" value="${pi/180}"/>
+
+    <!-- Adaptor frame = CAD frame. Rotating +90 deg about x puts the CAD +y (away from the plate)
+         along the parent's z axis, and the instrument direction (+z) along the parent's -y axis. -->
+    <link name="davinci_adapter">
+      <!-- Add your adaptor's mesh here, e.g. for docker/davinci/meshes/my_adapter.stl in millimetres:
+      <visual>
+        <geometry>
+          <mesh filename="${mesh_dir}/my_adapter.stl" scale="0.001 0.001 0.001"/>
+        </geometry>
+        <material name="adapter_grey"><color rgba="0.75 0.77 0.82 1"/></material>
+      </visual>
+      -->
+      <inertial>
+        <mass value="0.6"/>
+        <origin xyz="0 0.03 0"/>
+        <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
+      </inertial>
+    </link>
+    <joint name="adapter_mount" type="fixed">
+      <parent link="${parent}"/>
+      <child link="davinci_adapter"/>
+      <origin xyz="0 0 ${z - adapter_plate_y}" rpy="${pi/2} 0 0"/>
+    </joint>
+
+    <link name="instrument_housing">
+      <visual>
+        <geometry><box size="${housing_size}"/></geometry>
+        <material name="instrument_blue"><color rgba="0.20 0.35 0.75 1"/></material>
+      </visual>
+    </link>
+    <joint name="instrument_housing_mount" type="fixed">
+      <parent link="davinci_adapter"/>
+      <child link="instrument_housing"/>
+      <origin xyz="${housing_center}" rpy="0 0 0"/>
+    </joint>
+
+    <link name="instrument_shaft">
+      <visual>
+        <!-- URDF cylinders lie along their local z axis -->
+        <origin xyz="0 0 ${shaft_length/2}"/>
+        <geometry><cylinder radius="${shaft_radius}" length="${shaft_length}"/></geometry>
+        <material name="shaft_dark"><color rgba="0.15 0.15 0.15 1"/></material>
+      </visual>
+      <!-- a flat marker on the shaft, so the roll is visible -->
+      <visual>
+        <origin xyz="0 ${shaft_radius} 0.02"/>
+        <geometry><box size="0.002 0.002 0.03"/></geometry>
+        <material name="marker_yellow"><color rgba="0.95 0.80 0.10 1"/></material>
+      </visual>
+    </link>
+    <joint name="instrument_roll" type="revolute">
+      <parent link="davinci_adapter"/>
+      <child link="instrument_shaft"/>
+      <origin xyz="0 ${shaft_axis_y} ${shaft_start_z}" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+      <limit lower="${-pi}" upper="${pi}" effort="1" velocity="3"/>
+    </joint>
+
+    <link name="instrument_wrist"/>
+    <joint name="instrument_wrist_frame" type="fixed">
+      <parent link="instrument_shaft"/>
+      <child link="instrument_wrist"/>
+      <origin xyz="0 0 ${shaft_length}" rpy="0 0 0"/>
+    </joint>
+
+    <link name="instrument_clevis">
+      <visual>
+        <origin xyz="0 0 ${wrist_to_jaw/2}"/>
+        <geometry><box size="0.006 0.006 ${wrist_to_jaw}"/></geometry>
+        <material name="clevis_grey"><color rgba="0.6 0.6 0.6 1"/></material>
+      </visual>
+    </link>
+    <joint name="instrument_pitch" type="revolute">
+      <parent link="instrument_wrist"/>
+      <child link="instrument_clevis"/>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-80*deg}" upper="${80*deg}" effort="1" velocity="3"/>
+    </joint>
+
+    <xacro:macro name="instrument_jaw" params="name">
+      <link name="instrument_${name}">
+        <visual>
+          <origin xyz="0 0 ${jaw_length/2}"/>
+          <geometry><box size="0.004 0.0015 ${jaw_length}"/></geometry>
+          <material name="jaw_silver"><color rgba="0.85 0.85 0.88 1"/></material>
+        </visual>
+      </link>
+      <joint name="instrument_${name}" type="revolute">
+        <parent link="instrument_clevis"/>
+        <child link="instrument_${name}"/>
+        <origin xyz="0 0 ${wrist_to_jaw}" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="${-80*deg}" upper="${80*deg}" effort="1" velocity="3"/>
+      </joint>
+    </xacro:macro>
+    <xacro:instrument_jaw name="jaw_1"/>
+    <xacro:instrument_jaw name="jaw_2"/>
+  </xacro:macro>
+</robot>
