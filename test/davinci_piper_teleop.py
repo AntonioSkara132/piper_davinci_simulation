@@ -42,9 +42,8 @@ from sofa_env.base import RenderFramework, RenderMode
 from sofa_env.scenes.grasp_lift_touch.grasp_lift_touch_env import ActionType, ObservationType
 from sofa_env.scenes.pick_and_place.pick_and_place_env import ActionType as PickAndPlaceActionType
 from sofa_env.scenes.pick_and_place.pick_and_place_env import ObservationType as PickAndPlaceObservationType
-from sofa_env.scenes.pick_and_place.pick_and_place_env import PickAndPlaceEnv
 
-from lapgym_keyboard_teleop import REDRAW_PERIOD, TELEOP_ANGULAR_SPEED, TELEOP_LINEAR_SPEED, WindowedEnvMixin, WindowedGraspLiftTouchEnv, read_console_key, reset_env
+from lapgym_keyboard_teleop import REDRAW_PERIOD, TELEOP_ANGULAR_SPEED, TELEOP_LINEAR_SPEED, WindowedGraspLiftTouchEnv, WindowedPickAndPlaceEnv, read_console_key, reset_env
 
 # Key rates at teleop_twist_keyboard's default speeds (degrees per second).
 ROLL_RATE = 90.0
@@ -55,11 +54,6 @@ GRIP_RATE = 40.0
 GRIP_MAX = 35.0
 JAW_MAX = 80.0
 WRIST_MAX = 80.0
-
-
-class WindowedPickAndPlaceEnv(WindowedEnvMixin, PickAndPlaceEnv):
-    window_caption = "LapGym pick-and-place"
-    ORBIT_DEFAULT_DISTANCE = 220.0  # the scene camera is about 220 mm from the board centre
 
 
 class PiperRegistration:
