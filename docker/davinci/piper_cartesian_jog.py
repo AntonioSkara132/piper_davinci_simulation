@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Keyboard Cartesian control of the Piper: move the da Vinci instrument tip with teleop_twist_keyboard.
 
+This node is only an example of how to control the arm. Write your own control and start it with
+run_davinci_piper --no-arm; this file can be a starting point.
+
 Subscribes to a Twist (from teleop_twist_keyboard), moves a target pose of the instrument wrist
 (frame instrument_wrist) in the Piper base frame, solves the inverse kinematics for joint1..joint6,
 and publishes the joint positions on control/joint_states. In simulation robot_state_publisher reads
