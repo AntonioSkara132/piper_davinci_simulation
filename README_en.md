@@ -9,7 +9,7 @@ In this project we use the SOFA simulator to simulate a surgical scene from LapG
 - **[ROS 2 Jazzy](https://docs.ros.org/en/jazzy/)** connects programs through messages on topics, and **[RViz](https://docs.ros.org/en/jazzy/Tutorials/Intermediate/RViz/RViz-User-Guide/RViz-User-Guide.html)** shows the model of the arm with the adaptor and the instrument.
 - **[Docker](https://docs.docker.com/get-started/)** packs all of this into one container, so the only thing you install on your computer is Docker (see [Setting up Docker](#setting-up-docker)).
 
-As an example of control there is a keyboard interface ([teleop_twist_keyboard](https://github.com/ros2/teleop_twist_keyboard)) that sends `Twist` messages. **It is only an example:** your program controls the arm through the same topics, described in [Topics and TF](#topics-and-tf).
+As an example of control there is a keyboard interface: [teleop_twist_keyboard](https://github.com/ros2/teleop_twist_keyboard) sends `Twist` messages, and [piper_cartesian_jog.py](docker/davinci/piper_cartesian_jog.py) turns them into joint positions with inverse kinematics. **It is only an example:** you write the arm control yourself, and you can use this node as a starting point. Run your node with `run_davinci_piper --rings --no-arm`; the topics to use are described in [Topics and TF](#topics-and-tf).
 
 [![Demo](media/demo.gif)](media/demo.mp4)
 
