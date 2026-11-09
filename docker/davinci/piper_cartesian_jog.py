@@ -28,7 +28,7 @@ flange has to travel around the tip on a circle of about 0.3 m, and joint5 (+-70
     python3 piper_cartesian_jog.py --ros-args -r cmd_vel:=/piper/cmd_vel
     python3 piper_cartesian_jog.py --ros-args -p seed_topic:=feedback/joint_states   # real arm: start from its current pose
 
-Inverse kinematics: weighted damped least squares on a numerical Jacobian of the URDF chain from
+Inverse kinematics: weighted damped least squares on the geometric Jacobian of the URDF chain from
 the robot_description topic, so it uses the same model (adaptor and instrument offsets included) as
 RViz. Errors are weighted 1 for tip position (metres), 0.3 for shaft direction (radians) and 0.02
 for roll about the shaft.
@@ -104,14 +104,20 @@ class Chain:
             self.steps.append((t, index, axis / np.linalg.norm(axis)))
 
     def fk(self, q: np.ndarray) -> np.ndarray:
+        return self.fk_with_joints(q)[0]
+
+    def fk_with_joints(self, q: np.ndarray) -> tuple:
+        """Tool pose (4x4, base frame) and, for each moving joint, (index, axis, position) in the base frame."""
         t = np.eye(4)
+        joints = []
         for origin, index, axis in self.steps:
             t = t @ origin
             if index is not None:
+                joints.append((index, t[:3, :3] @ axis, t[:3, 3].copy()))
                 rotation = np.eye(4)
                 rotation[:3, :3] = axis_angle(axis, q[index])
                 t = t @ rotation
-        return t
+        return t, joints
 
     def error(self, q: np.ndarray, target: np.ndarray) -> np.ndarray:
         """[position error (base frame, m), rotation error (tool frame, rad)]. In the tool frame the
@@ -120,13 +126,15 @@ class Chain:
         rotation = t[:3, :3].T @ rotation_vector(target[:3, :3] @ t[:3, :3].T)
         return np.concatenate([target[:3, 3] - t[:3, 3], rotation])
 
-    def jacobian(self, q: np.ndarray, target: np.ndarray, step: float = 1e-6) -> np.ndarray:
-        base = self.error(q, target)
+    def jacobian(self, q: np.ndarray) -> np.ndarray:
+        """Geometric Jacobian of revolute joints: column i is [z_i x (p_tool - p_i); R^T z_i], where z_i and
+        p_i are the joint axis and position in the base frame. The angular part is turned into the tool
+        frame to match error(). For the small errors of one control step it is the derivative of -error."""
+        t, joints = self.fk_with_joints(q)
         jac = np.zeros((6, 6))
-        for i in range(6):
-            dq = q.copy()
-            dq[i] += step
-            jac[:, i] = -(self.error(dq, target) - base) / step
+        for index, axis, position in joints:
+            jac[:3, index] = np.cross(axis, t[:3, 3] - position)
+            jac[3:, index] = t[:3, :3].T @ axis
         return jac
 
 
@@ -191,7 +199,7 @@ class PiperCartesianJog(Node):
             error = WEIGHTS @ self.chain.error(q, proposed)
             if np.linalg.norm(error) < 1e-6:
                 break
-            jac = WEIGHTS @ self.chain.jacobian(q, proposed)
+            jac = WEIGHTS @ self.chain.jacobian(q)
             q = np.clip(q + jac.T @ np.linalg.solve(jac @ jac.T + 1e-5 * np.eye(6), error), self.chain.lower, self.chain.upper)
         max_step = self.get_parameter("max_joint_speed").value * self.dt
         q = self.q + np.clip(q - self.q, -max_step, max_step)
