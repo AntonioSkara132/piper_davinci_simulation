@@ -142,7 +142,34 @@ RViz i SOFA prikazuju `/control/joint_states`, a s opcijom `--follow` `/feedback
 - pokrenete `run_davinci_piper --rings --no-arm`, tako da tipke ruke ne rade, i sami objavljujete `JointState` na `/control/joint_states`, s trenutnim vremenom u `header.stamp`.
 
 ## Rad na projektu
-Kod je u mapi [docker](docker): ROS dio u [docker/davinci](docker/davinci), SOFA dio u [docker/sofa](docker/sofa). Topici kojima upravljate rukom opisani su u [Topici i TF](#topici-i-tf). SOFA skripte pokreću se sa `sofa-python`. Promjene unutar kontejnera brišu se s kontejnerom, pa mijenjajte datoteke u mapi `docker` i ponovno izgradite sliku.
+Kod je u mapi [docker](docker). Upravljački program (driver) za Piper nije u njoj: Dockerfile ga pri izgradnji slike klonira iz [AgileX repozitorija](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) u `/root/agx_arm_ws`. U driver nismo ništa dodavali niti smo ga mijenjali.
+
+```
+docker/
+├── Dockerfile
+├── run_piper.sh                  pokreće kontejner piper-jazzy na računalu
+│
+├── davinci/          → u kontejneru /root/davinci_piper/   (ROS 2 dio)
+│   ├── piper_davinci.urdf.xacro  model: Piper + adapter + instrument
+│   ├── meshes/                   ovdje stavljate STL svog adaptera
+│   ├── piper_cartesian_jog.py    /piper/cmd_vel → IK → /control/joint_states
+│   ├── piper_tool_bridge.py      TF base_link→instrument_wrist → UDP prema SOFA-i
+│   ├── davinci_piper.launch.py   robot_state_publisher, jog/slideri, bridge, RViz
+│   ├── davinci_piper.rviz        postavke RViz-a
+│   ├── run_davinci_piper.sh      naredba run_davinci_piper (tmux sesija)
+│   └── tile_windows.sh           slaže prozore SOFA-e, RViz-a i terminala
+│
+└── sofa/             → u kontejneru /opt/sofa_teleop/      (SOFA dio)
+    ├── davinci_piper_teleop.py   LapGym scena koja prati pozu iz piper_tool_bridge
+    ├── lapgym_keyboard_teleop.py upravljanje LapGym hvataljkom tipkama, prozor SOFA-e
+    ├── twist_socket_bridge.py    /davinci/cmd_vel → UDP (roll, pitch, yaw, hvat)
+    ├── run_sofa_teleop.sh        naredba run_sofa_teleop (LapGym bez Pipera)
+    ├── sofa-python               pokreće Python sa SOFA-om
+    ├── sofa_env_sofa25.patch     prilagodba sofa_env za SOFA v25.12
+    └── smoke_test.py             provjera da se svih 14 LapGym scena pokreće
+```
+
+Topici kojima upravljate rukom opisani su u [Topici i TF](#topici-i-tf). SOFA skripte pokreću se sa `sofa-python`. Promjene unutar kontejnera brišu se s kontejnerom, pa mijenjajte datoteke u mapi `docker` i ponovno izgradite sliku.
 
 ## Licenca
 [MIT](LICENSE). [sofa_env](https://github.com/ScheiklP/sofa_env) (MIT) preuzima se tijekom izgradnje slike.

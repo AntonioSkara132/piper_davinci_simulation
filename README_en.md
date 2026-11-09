@@ -142,7 +142,34 @@ RViz and SOFA show `/control/joint_states`, or `/feedback/joint_states` with `--
 - start `run_davinci_piper --rings --no-arm`, so the ARM keys are off, and publish `JointState` on `/control/joint_states` yourself, with the current time in `header.stamp`.
 
 ## Working on your project
-The code is in the [docker](docker) folder: the ROS part in [docker/davinci](docker/davinci), the SOFA part in [docker/sofa](docker/sofa). The topics that move the arm are in [Topics and TF](#topics-and-tf). Run SOFA scripts with `sofa-python`. Changes inside the container are lost when it is removed, so edit the files in the `docker` folder and rebuild the image.
+The code is in the [docker](docker) folder. The Piper driver is not in it: the Dockerfile clones it from the [AgileX repository](https://github.com/agilexrobotics/agx_arm_ros/tree/ros2) into `/root/agx_arm_ws` while building the image. We did not add anything to the driver or change it.
+
+```
+docker/
+├── Dockerfile
+├── run_piper.sh                  starts the piper-jazzy container on your computer
+│
+├── davinci/          → in the container /root/davinci_piper/   (ROS 2 part)
+│   ├── piper_davinci.urdf.xacro  model: Piper + adaptor + instrument
+│   ├── meshes/                   put your adaptor's STL here
+│   ├── piper_cartesian_jog.py    /piper/cmd_vel → IK → /control/joint_states
+│   ├── piper_tool_bridge.py      TF base_link→instrument_wrist → UDP to SOFA
+│   ├── davinci_piper.launch.py   robot_state_publisher, jog/sliders, bridge, RViz
+│   ├── davinci_piper.rviz        RViz settings
+│   ├── run_davinci_piper.sh      the run_davinci_piper command (tmux session)
+│   └── tile_windows.sh           arranges the SOFA, RViz and terminal windows
+│
+└── sofa/             → in the container /opt/sofa_teleop/      (SOFA part)
+    ├── davinci_piper_teleop.py   LapGym scene that follows the pose from piper_tool_bridge
+    ├── lapgym_keyboard_teleop.py keyboard control of the LapGym gripper, SOFA window
+    ├── twist_socket_bridge.py    /davinci/cmd_vel → UDP (roll, pitch, yaw, grip)
+    ├── run_sofa_teleop.sh        the run_sofa_teleop command (LapGym without the Piper)
+    ├── sofa-python               runs Python with SOFA
+    ├── sofa_env_sofa25.patch     adapts sofa_env to SOFA v25.12
+    └── smoke_test.py             checks that all 14 LapGym scenes start
+```
+
+The topics that move the arm are in [Topics and TF](#topics-and-tf). Run SOFA scripts with `sofa-python`. Changes inside the container are lost when it is removed, so edit the files in the `docker` folder and rebuild the image.
 
 ## License
 [MIT](LICENSE). [sofa_env](https://github.com/ScheiklP/sofa_env) (MIT) is downloaded during the image build.
