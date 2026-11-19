@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>piper_servo</name>
+  <version>0.1.0</version>
+  <description>MoveIt Servo for the AgileX Piper arm, run alongside agx_arm_moveit / agx_arm_ctrl.</description>
+  <maintainer email="pero.drobac@fer.unizg.hr">Pero Drobac</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- piper_servo.launch.py -->
+  <exec_depend>agx_arm_moveit</exec_depend>
+  <exec_depend>moveit_servo</exec_depend>
+  <exec_depend>moveit_configs_utils</exec_depend>
+
+  <!-- keyboard_teleop.py -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>moveit_msgs</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

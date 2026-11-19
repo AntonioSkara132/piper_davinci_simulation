@@ -1,0 +1,60 @@
+###############################################################################
+# MoveIt Servo parameters for the AgileX Piper (MoveIt 2 / ROS 2 Jazzy).
+# Loaded under the "moveit_servo" namespace by launch/piper_servo.launch.py,
+# which also overrides joint_topic, publish_joint_velocities and
+# is_primary_planning_scene_monitor for use with agx_arm_moveit.
+# Full parameter reference: $(ros2 pkg prefix moveit_servo)/share/moveit_servo/config/servo_parameters.yaml
+###############################################################################
+
+move_group_name: arm          # Planning group from agx_arm.srdf (chain base_link -> tcp_link)
+
+## Outgoing commands
+publish_period: 0.01          # 100 Hz
+max_expected_latency: 0.1     # [s] command -> motion latency of the robot
+command_out_type: trajectory_msgs/JointTrajectory
+command_out_topic: /arm_controller/joint_trajectory
+publish_joint_positions: true
+publish_joint_velocities: true
+publish_joint_accelerations: false
+
+## Incoming commands
+# Teleop sends real units (m/s, rad/s); "scale" is only used with "unitless".
+command_in_type: speed_units
+scale:
+  linear: 0.1
+  rotational: 0.5
+  joint: 0.5
+incoming_command_timeout: 0.15  # [s] stop if no new command arrives in this time
+cartesian_command_in_topic: ~/delta_twist_cmds
+joint_command_in_topic: ~/delta_joint_cmds
+pose_command_in_topic: ~/pose_target_cmds
+status_topic: ~/status
+
+# Joint states Servo integrates from (launch file sets /control/joint_states).
+joint_topic: /joint_states
+
+## Smoothing
+use_smoothing: true
+smoothing_filter_plugin_name: online_signal_smoothing::AccelerationLimitedPlugin
+
+## Planning scene
+# false when move_group runs (the launch file sets false).
+is_primary_planning_scene_monitor: true
+check_octomap_collisions: false
+
+## Singularities
+# Jacobian condition number.
+lower_singularity_threshold: 35.0
+hard_stop_singularity_threshold: 4000.0
+leaving_singularity_threshold_multiplier: 2.0
+
+## Joint limits
+joint_limit_margins: [0.1]    # [rad] buffer to URDF position limits
+halt_all_joints_in_joint_mode: true
+halt_all_joints_in_cartesian_mode: true
+
+## Collision checking (self collision + planning scene objects)
+check_collisions: true
+collision_check_rate: 10.0
+self_collision_proximity_threshold: 0.01
+scene_collision_proximity_threshold: 0.02
